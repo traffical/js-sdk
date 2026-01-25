@@ -8,6 +8,10 @@
 # - cdn.traffical.io/js-client/v{VERSION}/traffical.min.js
 # - cdn.traffical.io/js-client/v{MAJOR}/traffical.min.js
 # - cdn.traffical.io/js-client/latest/traffical.min.js
+#
+# Environment variables (required in CI):
+# - CLOUDFLARE_API_TOKEN: API token with R2 write permissions
+# - CLOUDFLARE_ACCOUNT_ID: Your Cloudflare account ID
 
 set -e
 
@@ -19,13 +23,27 @@ echo "Releasing @traffical/js-client v$VERSION to CDN..."
 
 # Ensure we're in the right directory
 if [ ! -f "package.json" ]; then
-  echo "Error: Must run from sdk/js-client directory"
+  echo "Error: Must run from packages/js-client directory"
   exit 1
 fi
 
-# Build the SDK
-echo "Building..."
-bun run build
+# Check for required environment variables in CI
+if [ -n "$CI" ]; then
+  if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    echo "Error: CLOUDFLARE_API_TOKEN is not set"
+    exit 1
+  fi
+  if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+    echo "Error: CLOUDFLARE_ACCOUNT_ID is not set"
+    exit 1
+  fi
+fi
+
+# Build the SDK (skip if already built, e.g., in CI)
+if [ ! -f "dist/traffical.min.js" ]; then
+  echo "Building..."
+  bun run build
+fi
 
 # Check if build succeeded
 if [ ! -f "dist/traffical.min.js" ]; then
@@ -81,4 +99,5 @@ echo "URLs:"
 echo "  https://cdn.traffical.io/js-client/v$VERSION/traffical.min.js (immutable)"
 echo "  https://cdn.traffical.io/js-client/v$MAJOR/traffical.min.js (1h cache)"
 echo "  https://cdn.traffical.io/js-client/latest/traffical.min.js (5m cache)"
+
 

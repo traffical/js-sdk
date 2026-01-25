@@ -10,7 +10,6 @@
     "ci:publish": "for dir in packages/*; do (cd \"$dir\" && bun publish --access public || true); done && changeset tag"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.0"
+    "@changesets/cli": "^2.29.8"
   }
 }
-

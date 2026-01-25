@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.2.1
+
+### Patch Changes
+
+- f4d7b71: Fix broken workspace dependencies from 0.2.0 release. Now using custom publish workflow that properly resolves workspace:^ to actual versions during bun publish.
+
 ## 0.2.0
 
 ### Minor Changes

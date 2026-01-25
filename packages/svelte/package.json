@@ -34,9 +34,9 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@traffical/core": "workspace:^",
-    "@traffical/js-client": "workspace:^",
-    "@traffical/node": "workspace:^"
+    "@traffical/core": "0.2.1",
+    "@traffical/js-client": "0.2.1",
+    "@traffical/node": "0.2.1"
   },
   "devDependencies": {
     "@sveltejs/package": "^2.3.0",

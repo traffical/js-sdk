@@ -3,31 +3,29 @@
   "version": "0.1.4",
   "description": "Traffical SDK for Svelte 5 - Provider and hooks for parameter resolution with SSR support",
   "type": "module",
-  "svelte": "./src/index.ts",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
+  "svelte": "./dist/index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "svelte": "./src/index.ts",
-      "bun": "./src/index.ts",
-      "import": "./src/index.ts"
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./sveltekit": {
       "types": "./dist/sveltekit.d.ts",
-      "bun": "./src/sveltekit.ts",
-      "import": "./src/sveltekit.ts"
+      "svelte": "./dist/sveltekit.js",
+      "default": "./dist/sveltekit.js"
     },
     "./server": {
       "types": "./dist/server.d.ts",
-      "bun": "./src/server.ts",
-      "import": "./src/server.ts"
+      "svelte": "./dist/server.js",
+      "default": "./dist/server.js"
     }
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
     "build": "svelte-package --input src",

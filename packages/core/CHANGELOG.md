@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.2.2
+
+### Patch Changes
+
+- 3e14c53: Testing, back to using changesets.
+
 ## 0.2.1
 
 ### Patch Changes

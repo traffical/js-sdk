@@ -1,6 +1,6 @@
 {
   "name": "@traffical/core",
-  "version": "0.1.3",
+  "version": "0.1.2",
   "description": "Pure TypeScript core for Traffical SDK - parameter resolution without I/O",
   "type": "module",
   "main": "./src/index.ts",

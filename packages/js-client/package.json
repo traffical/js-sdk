@@ -21,8 +21,7 @@
     "build:iife": "bun run esbuild.config.ts",
     "dev": "tsc --watch",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "release": "bun scripts/release.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@traffical/core": "^0.1.3"

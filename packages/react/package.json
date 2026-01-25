@@ -1,6 +1,6 @@
 {
   "name": "@traffical/react",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Traffical SDK for React - Provider and hooks for parameter resolution",
   "type": "module",
   "main": "./src/index.ts",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@traffical/core": "^0.1.3",
-    "@traffical/js-client": "^0.1.3"
+    "@traffical/js-client": "^0.1.4"
   },
   "devDependencies": {
     "@types/bun": "latest",

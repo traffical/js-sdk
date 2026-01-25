@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.1.5
+
+### Patch Changes
+
+- 00bcac0: Update @traffical/core dependency to ^0.1.4 which has fixed JavaScript exports.
+
 ## 0.1.4
 
 ### Patch Changes

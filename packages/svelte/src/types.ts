@@ -138,6 +138,12 @@ export interface TrafficalContextValue {
   getUnitKey: () => string;
   /** Function to get the full context */
   getContext: () => Context;
+  /**
+   * Initialize the client (fetches config).
+   * Called automatically by TrafficalProvider after mount.
+   * Only runs on client-side to avoid SSR fetch warnings.
+   */
+  initializeClient: () => Promise<void>;
   /** Initial params from SSR for hydration */
   initialParams?: Record<string, unknown>;
 }

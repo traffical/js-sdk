@@ -54,6 +54,9 @@ function createTrafficalContextState(
   let bundle = $state(config.initialBundle ?? null);
 
   // Initialize client only in browser
+  // NOTE: We create the client but DO NOT call initialize() here.
+  // initialize() triggers fetch(), which causes SSR warnings.
+  // The TrafficalProvider component will call initializeClient() after mount.
   if (isBrowser()) {
     // Use localStorage in browser, memory storage would lose data
     const storage = new LocalStorageProvider();
@@ -80,23 +83,11 @@ function createTrafficalContextState(
     });
 
     client = clientInstance;
-
-    // Initialize asynchronously (fetches fresh config if needed)
-    clientInstance
-      .initialize()
-      .then(() => {
-        ready = true;
-        // Update bundle if client fetched a newer one
-        const configVersion = clientInstance.getConfigVersion();
-        if (configVersion) {
-          // Bundle is internal, but we track ready state
-        }
-      })
-      .catch((err: unknown) => {
-        error = err instanceof Error ? err : new Error(String(err));
-        // Still mark as ready - we'll use defaults/initial bundle
-        ready = true;
-      });
+    
+    // If we have initial bundle, mark as ready immediately (no fetch needed for initial render)
+    if (config.initialBundle) {
+      ready = true;
+    }
   } else {
     // On server, use memory storage and mark as ready if we have initial data
     // The client won't actually be used for tracking on server
@@ -140,6 +131,23 @@ function createTrafficalContextState(
     };
   }
 
+  /**
+   * Initializes the client by fetching config.
+   * Should be called from onMount/effect to avoid SSR fetch warnings.
+   */
+  async function initializeClient(): Promise<void> {
+    if (!client) return;
+    
+    try {
+      await client.initialize();
+      ready = true;
+    } catch (err: unknown) {
+      error = err instanceof Error ? err : new Error(String(err));
+      // Still mark as ready - we'll use defaults/initial bundle
+      ready = true;
+    }
+  }
+
   return {
     get client() {
       return client;
@@ -155,6 +163,7 @@ function createTrafficalContextState(
     },
     getUnitKey,
     getContext,
+    initializeClient,
     initialParams: config.initialParams,
   };
 }

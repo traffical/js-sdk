@@ -8,4 +8,5 @@ dist/
 .turbo
 coverage/
 .nyc_output/
+.svelte-kit/
 

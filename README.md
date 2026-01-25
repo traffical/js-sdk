@@ -1,6 +1,8 @@
 # Traffical JavaScript SDK
 
-Official JavaScript/TypeScript SDKs for [Traffical](https://traffical.io) - the experimentation platform.
+Official JavaScript/TypeScript SDKs for [Traffical](https://traffical.io).
+
+Traffical is a production-grade platform for experimentation, feature management, and adaptive optimization. It unifies A/B testing, feature flags, and contextual bandits into a single parameter-first system. These SDKs resolve parameters locally at the edge with sub-millisecond latency—no per-request API calls required.
 
 ## Packages
 
@@ -11,7 +13,8 @@ Official JavaScript/TypeScript SDKs for [Traffical](https://traffical.io) - the 
 | [@traffical/react](packages/react) | React provider and hooks | [![npm](https://img.shields.io/npm/v/@traffical/react)](https://www.npmjs.com/package/@traffical/react) |
 | [@traffical/svelte](packages/svelte) | Svelte 5 bindings with SSR support | [![npm](https://img.shields.io/npm/v/@traffical/svelte)](https://www.npmjs.com/package/@traffical/svelte) |
 | [@traffical/node](packages/node) | Node.js server SDK | [![npm](https://img.shields.io/npm/v/@traffical/node)](https://www.npmjs.com/package/@traffical/node) |
-| [@traffical/cli](packages/cli) | Command-line interface for config-as-code | [![npm](https://img.shields.io/npm/v/@traffical/cli)](https://www.npmjs.com/package/@traffical/cli) |
+
+See also: [@traffical/cli](https://github.com/traffical/cli) - Command-line interface for config-as-code (separate repository)
 
 ## Quick Start
 
@@ -103,7 +106,6 @@ All packages follow [Semantic Versioning](https://semver.org/).
 | @traffical/react | 0.1.1 |
 | @traffical/svelte | 0.1.0 |
 | @traffical/node | 0.1.2 |
-| @traffical/cli | 0.1.0 |
 
 **0.x versions**: API may change between minor versions. Check changelogs before upgrading.
 

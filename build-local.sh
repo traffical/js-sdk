@@ -27,8 +27,6 @@ build_pkg "react" &
 build_pkg "svelte" &
 wait
 
-# 4. cli (standalone)
-build_pkg "cli"
 
 echo ""
 echo "✅ Done!"

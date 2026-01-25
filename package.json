@@ -6,7 +6,8 @@
     "build": "./build-local.sh",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
-    "release": "changeset publish"
+    "ci:version": "changeset version && bun update",
+    "ci:publish": "for dir in packages/*; do (cd \"$dir\" && bun publish --access public || true); done && changeset tag"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0"

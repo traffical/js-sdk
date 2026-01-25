@@ -1,6 +1,6 @@
 {
   "name": "@traffical/node",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Traffical SDK for Node.js - HTTP client with caching and event tracking",
   "type": "module",
   "main": "./src/index.ts",

@@ -8,9 +8,8 @@ import { describe, test, expect } from "bun:test";
 import { resolveParameters, decide } from "./engine.js";
 import type { ConfigBundle } from "../types/index.js";
 
-// Load test fixtures
-import bundleBasic from "../../../test-vectors/fixtures/bundle_basic.json";
-import bundleConditions from "../../../test-vectors/fixtures/bundle_conditions.json";
+// Load test fixtures from @traffical/sdk-spec
+import { bundleBasic, bundleConditions } from "@traffical/sdk-spec";
 
 // Default values for basic bundle parameters
 const basicDefaults = {

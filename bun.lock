@@ -36,6 +36,7 @@
         "ulid": "^2.3.0",
       },
       "devDependencies": {
+        "@traffical/sdk-spec": "^0.1.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -246,6 +247,8 @@
     "@traffical/node": ["@traffical/node@workspace:packages/node"],
 
     "@traffical/react": ["@traffical/react@workspace:packages/react"],
+
+    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.1.0", "", {}, "sha512-7hEW7a4DU/gsSZHJffTp6lMldAtNKkRe22i1mH+W8rLCk5UP7BFPXRJFfntfvLKBUp0HRWA43LqAdC8TE7MYfA=="],
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 

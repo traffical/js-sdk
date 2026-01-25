@@ -1,5 +1,13 @@
 # @traffical/react
 
+## 0.1.3
+
+### Patch Changes
+
+- 362cf8d: fix: use npm version ranges instead of workspace protocol for dependencies
+- Updated dependencies [362cf8d]
+  - @traffical/js-client@0.1.4
+
 ## 0.1.2
 
 ### Patch Changes

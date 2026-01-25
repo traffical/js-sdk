@@ -1,5 +1,11 @@
 # @traffical/node
 
+## 0.1.4
+
+### Patch Changes
+
+- 362cf8d: fix: use npm version ranges instead of workspace protocol for dependencies
+
 ## 0.1.3
 
 ### Patch Changes

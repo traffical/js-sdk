@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Build and link all Traffical SDKs for local development
-# Usage: ./build-local.sh [--watch]
+# Usage: ./build-local.sh
 
 set -e
 cd "$(dirname "$0")"
-
-WATCH=${1:-}
 
 echo "🔧 Building Traffical SDKs..."
 echo ""
@@ -14,11 +12,11 @@ build_pkg() {
   local pkg=$1
   local cmd=${2:-build}
   echo "  → $pkg"
-  (cd "$pkg" && bun run "$cmd") || echo "  ⚠️  $pkg failed"
+  (cd "packages/$pkg" && bun run "$cmd") || echo "  ⚠️  $pkg failed"
 }
 
 # 1. Core (base - no deps)
-build_pkg "core-ts"
+build_pkg "core"
 
 # 2. js-client (depends on core)
 build_pkg "js-client"

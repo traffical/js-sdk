@@ -19,7 +19,7 @@ import type {
 } from "./types.ts";
 
 // Import the JSON Schema
-import configSchema from "../../../shared-spec/traffical-config.schema.json";
+import configSchema from "../../schemas/traffical-config.schema.json";
 
 /** Directory name for Traffical config */
 export const TRAFFICAL_DIR = ".traffical";

@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://traffical.io/schemas/config.json",
+  "title": "TrafficalConfig",
+  "description": "Traffical configuration file schema for traffical.yaml",
+  "type": "object",
+  "required": ["version", "project", "parameters"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1.0"],
+      "description": "Config file version"
+    },
+    "project": {
+      "type": "object",
+      "description": "Project identification",
+      "required": ["id", "orgId"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^proj_",
+          "description": "Project ID from Traffical (starts with proj_)"
+        },
+        "orgId": {
+          "type": "string",
+          "pattern": "^org_",
+          "description": "Organization ID from Traffical (starts with org_)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Parameters synced from this config file",
+      "additionalProperties": {
+        "$ref": "#/definitions/parameter"
+      }
+    },
+    "events": {
+      "type": "object",
+      "description": "Event definitions synced from this config file",
+      "additionalProperties": {
+        "$ref": "#/definitions/event"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "parameter": {
+      "type": "object",
+      "description": "Parameter definition",
+      "required": ["type", "default"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "json"],
+          "description": "The type of value this parameter holds"
+        },
+        "default": {
+          "description": "Default value used when no policy overrides apply"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Organizational grouping for the parameter"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the parameter"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "string" } }
+          },
+          "then": {
+            "properties": { "default": { "type": "string" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "number" } }
+          },
+          "then": {
+            "properties": { "default": { "type": "number" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "boolean" } }
+          },
+          "then": {
+            "properties": { "default": { "type": "boolean" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "json" } }
+          },
+          "then": {
+            "properties": {
+              "default": {
+                "oneOf": [
+                  { "type": "object" },
+                  { "type": "array" }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "event": {
+      "type": "object",
+      "description": "Event definition",
+      "required": ["valueType"],
+      "properties": {
+        "valueType": {
+          "type": "string",
+          "enum": ["currency", "count", "rate", "boolean"],
+          "description": "The type of value this event tracks"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Optional unit for the value (e.g., 'USD', 'items', 'percent')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the event"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "version": "1.0",
+      "project": {
+        "id": "proj_abc123",
+        "orgId": "org_xyz789"
+      },
+      "parameters": {
+        "checkout.button.color": {
+          "type": "string",
+          "default": "#FF6600",
+          "namespace": "checkout",
+          "description": "Primary CTA button background color"
+        },
+        "checkout.new_flow.enabled": {
+          "type": "boolean",
+          "default": false,
+          "namespace": "checkout"
+        },
+        "pricing.discount.percentage": {
+          "type": "number",
+          "default": 0,
+          "namespace": "pricing"
+        },
+        "ui.theme.config": {
+          "type": "json",
+          "default": {
+            "primaryColor": "#FF6600",
+            "borderRadius": 8
+          },
+          "namespace": "ui"
+        }
+      },
+      "events": {
+        "purchase": {
+          "valueType": "currency",
+          "unit": "USD",
+          "description": "User completes a purchase"
+        },
+        "add_to_cart": {
+          "valueType": "count",
+          "description": "User adds item to cart"
+        },
+        "checkout_started": {
+          "valueType": "boolean",
+          "description": "User initiates checkout"
+        }
+      }
+    }
+  ]
+}
+

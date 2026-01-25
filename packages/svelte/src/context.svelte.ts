@@ -92,7 +92,7 @@ function createTrafficalContextState(
           // Bundle is internal, but we track ready state
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         error = err instanceof Error ? err : new Error(String(err));
         // Still mark as ready - we'll use defaults/initial bundle
         ready = true;

@@ -11,7 +11,7 @@
     "declarationMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["bun-types", "node"],
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "resolveJsonModule": true

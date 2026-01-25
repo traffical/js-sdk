@@ -71,7 +71,7 @@ export {
   generateEventId,
   generateDecisionId,
   generateExposureId,
-  generateRewardId,
+  generateTrackEventId,
 } from "@traffical/core";
 
 // =============================================================================

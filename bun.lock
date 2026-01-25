@@ -10,7 +10,7 @@
     },
     "packages/core": {
       "name": "@traffical/core",
-      "version": "0.1.3",
+      "version": "0.2.1",
       "dependencies": {
         "nanoid": "^5.0.9",
         "ulid": "^2.3.0",
@@ -23,9 +23,9 @@
     },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.1.4",
+      "version": "0.2.1",
       "dependencies": {
-        "@traffical/core": "^0.1.3",
+        "@traffical/core": "workspace:^",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -35,9 +35,9 @@
     },
     "packages/node": {
       "name": "@traffical/node",
-      "version": "0.1.4",
+      "version": "0.2.1",
       "dependencies": {
-        "@traffical/core": "^0.1.3",
+        "@traffical/core": "workspace:^",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -46,7 +46,7 @@
     },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.1.3",
+      "version": "0.2.1",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -62,11 +62,11 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.1.2",
+      "version": "0.2.1",
       "dependencies": {
-        "@traffical/core": "^0.1.3",
-        "@traffical/js-client": "^0.1.4",
-        "@traffical/node": "^0.1.4",
+        "@traffical/core": "workspace:^",
+        "@traffical/js-client": "workspace:^",
+        "@traffical/node": "workspace:^",
       },
       "devDependencies": {
         "@sveltejs/package": "^2.3.0",

@@ -1,5 +1,13 @@
 # @traffical/react
 
+## 0.1.4
+
+### Patch Changes
+
+- b1eee70: Fix package exports to point to compiled JavaScript files instead of TypeScript source files. This resolves Node.js runtime errors (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING) and Vite dependency optimization failures when using these packages.
+- Updated dependencies [b1eee70]
+  - @traffical/core@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes

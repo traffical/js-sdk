@@ -1,5 +1,11 @@
 # @traffical/svelte
 
+## 0.1.6
+
+### Patch Changes
+
+- 9920299: Update dependency versions to require fixed versions of @traffical/core and @traffical/node with proper JavaScript exports.
+
 ## 0.1.5
 
 ### Patch Changes

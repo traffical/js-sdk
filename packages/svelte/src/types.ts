@@ -294,3 +294,6 @@ export type {
   TrafficalPlugin,
 };
 
+// Server-side types (from @traffical/node)
+export type { TrafficalClientOptions } from "@traffical/node";
+

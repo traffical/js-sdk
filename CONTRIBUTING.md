@@ -43,7 +43,6 @@ This monorepo contains multiple packages:
 - `packages/react` - React bindings
 - `packages/svelte` - Svelte 5 bindings
 - `packages/node` - Node.js server SDK
-- `packages/cli` - Command-line interface
 
 ### Making Changes
 

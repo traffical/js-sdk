@@ -15,8 +15,7 @@
     { "path": "packages/js-client" },
     { "path": "packages/node" },
     { "path": "packages/react" },
-    { "path": "packages/svelte" },
-    { "path": "packages/cli" }
+    { "path": "packages/svelte" }
   ],
   "files": []
 }

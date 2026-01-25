@@ -82,9 +82,95 @@ In your root layout, initialize Traffical:
 
 ## SSR with SvelteKit
 
-For optimal performance and to prevent content flashing, fetch the config bundle on the server:
+For optimal performance and to prevent content flashing, fetch the config bundle on the server.
 
-### Server Load Function
+### Option A: Singleton Server Client (Recommended)
+
+For production apps, use a singleton server client with caching, background refresh, and event tracking:
+
+```typescript
+// src/hooks.server.ts
+import { createTrafficalClient } from '@traffical/svelte/server';
+import { TRAFFICAL_API_KEY } from '$env/static/private';
+
+// Singleton client with ETag caching, background refresh, and event batching
+const traffical = await createTrafficalClient({
+  orgId: 'org_123',
+  projectId: 'proj_456',
+  env: 'production',
+  apiKey: TRAFFICAL_API_KEY,
+});
+
+export const handle = async ({ event, resolve }) => {
+  event.locals.traffical = traffical;
+  return resolve(event);
+};
+```
+
+Then use it in your load functions:
+
+```typescript
+// src/routes/+layout.server.ts
+export async function load({ locals }) {
+  return {
+    traffical: { bundle: locals.traffical.getBundle() },
+  };
+}
+```
+
+```typescript
+// src/routes/checkout/+page.server.ts
+export async function load({ locals, cookies }) {
+  const userId = cookies.get('userId') || 'anonymous';
+
+  // Full decision with tracking
+  const decision = locals.traffical.decide({
+    context: { userId },
+    defaults: {
+      'checkout.ctaText': 'Buy Now',
+      'checkout.ctaColor': '#000000',
+    },
+  });
+
+  return {
+    checkoutParams: decision.values,
+  };
+}
+```
+
+Track events from API routes:
+
+```typescript
+// src/routes/api/purchase/+server.ts
+export async function POST({ locals, request }) {
+  const { orderId, amount } = await request.json();
+
+  locals.traffical.track('purchase', { value: amount, orderId });
+
+  return new Response('OK');
+}
+```
+
+Don't forget to type `event.locals` in `app.d.ts`:
+
+```typescript
+// src/app.d.ts
+import type { TrafficalClient } from '@traffical/svelte/server';
+
+declare global {
+  namespace App {
+    interface Locals {
+      traffical: TrafficalClient;
+    }
+  }
+}
+
+export {};
+```
+
+### Option B: Simple Load Function
+
+For simpler apps, fetch the bundle per-request using SvelteKit's fetch:
 
 ```typescript
 // src/routes/+layout.server.ts
@@ -256,14 +342,44 @@ const domPlugin = useTrafficalPlugin<DOMBindingPlugin>('dom-binding');
 domPlugin?.applyBindings();
 ```
 
-### SvelteKit Helpers
+### Server-Side Utilities
+
+Import from `@traffical/svelte/server` for full server-side support:
+
+#### `createTrafficalClient(options)`
+
+Create a singleton server client with caching, background refresh, and event tracking.
+
+```typescript
+import { createTrafficalClient } from '@traffical/svelte/server';
+
+const traffical = await createTrafficalClient({
+  orgId: 'org_123',
+  projectId: 'proj_456',
+  env: 'production',
+  apiKey: 'sk_...',
+});
+
+// Make decisions with tracking
+const decision = traffical.decide({
+  context: { userId: 'user_123' },
+  defaults: { 'feature.enabled': false },
+});
+
+// Track events
+traffical.track('purchase', { value: 99.99 });
+
+// Clean up on shutdown
+await traffical.destroy();
+```
 
 #### `loadTrafficalBundle(options)`
 
-Fetch the config bundle in a SvelteKit load function.
+Fetch the config bundle in a SvelteKit load function (simpler alternative).
 
 ```typescript
-import { loadTrafficalBundle } from '@traffical/svelte/sveltekit';
+import { loadTrafficalBundle } from '@traffical/svelte/server';
+// or: import { loadTrafficalBundle } from '@traffical/svelte/sveltekit';
 
 const { bundle, error } = await loadTrafficalBundle({
   orgId: 'org_123',
@@ -279,7 +395,7 @@ const { bundle, error } = await loadTrafficalBundle({
 Resolve parameters on the server for SSR.
 
 ```typescript
-import { resolveParamsSSR } from '@traffical/svelte/sveltekit';
+import { resolveParamsSSR } from '@traffical/svelte/server';
 
 const params = resolveParamsSSR(bundle, { userId: 'user_123' }, {
   'feature.name': 'default',

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/js-client" },
+    { "path": "packages/node" },
+    { "path": "packages/react" },
+    { "path": "packages/svelte" },
+    { "path": "packages/cli" }
+  ],
+  "files": []
+}
+

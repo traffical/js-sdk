@@ -1,0 +1,15 @@
+{
+  "name": "@traffical/js-sdk",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "./build-local.sh",
+    "test": "bun run --filter '*' test",
+    "typecheck": "bun run --filter '*' typecheck",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0"
+  }
+}
+

@@ -1,0 +1,67 @@
+{
+  "name": "@traffical/svelte",
+  "version": "0.1.0",
+  "description": "Traffical SDK for Svelte 5 - Provider and hooks for parameter resolution with SSR support",
+  "type": "module",
+  "svelte": "./src/index.ts",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./sveltekit": {
+      "types": "./dist/sveltekit.d.ts",
+      "bun": "./src/sveltekit.ts",
+      "import": "./src/sveltekit.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "svelte-package --input src",
+    "dev": "svelte-package --input src --watch",
+    "test": "bun test",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@traffical/core": "workspace:^",
+    "@traffical/js-client": "workspace:^"
+  },
+  "devDependencies": {
+    "@sveltejs/package": "^2.3.0",
+    "@types/bun": "latest",
+    "svelte": "^5.46.4",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "keywords": [
+    "traffical",
+    "feature-flags",
+    "experimentation",
+    "a/b-testing",
+    "svelte",
+    "svelte5",
+    "sveltekit",
+    "runes",
+    "ssr"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/traffical/js-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
+

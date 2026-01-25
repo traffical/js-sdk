@@ -1,0 +1,55 @@
+{
+  "name": "@traffical/react",
+  "version": "0.1.1",
+  "description": "Traffical SDK for React - Provider and hooks for parameter resolution",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "bun": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "release": "bun scripts/release.ts"
+  },
+  "dependencies": {
+    "@traffical/core": "workspace:^",
+    "@traffical/js-client": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "keywords": [
+    "traffical",
+    "feature-flags",
+    "experimentation",
+    "a/b-testing",
+    "react",
+    "hooks"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/traffical/js-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

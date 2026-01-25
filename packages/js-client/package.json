@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@traffical/core": "^0.1.4"
+    "@traffical/core": "workspace:^"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -23,8 +23,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@traffical/core": "^0.1.4",
-    "@traffical/js-client": "^0.1.4"
+    "@traffical/core": "workspace:^",
+    "@traffical/js-client": "workspace:^"
   },
   "devDependencies": {
     "@types/bun": "latest",

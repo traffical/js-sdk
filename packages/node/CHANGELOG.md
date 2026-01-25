@@ -1,5 +1,13 @@
 # @traffical/node
 
+## 0.2.2
+
+### Patch Changes
+
+- 3e14c53: Testing, back to using changesets.
+- Updated dependencies [3e14c53]
+  - @traffical/core@0.2.2
+
 ## 0.2.1
 
 ### Patch Changes

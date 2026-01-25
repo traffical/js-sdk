@@ -1,6 +1,6 @@
 {
   "name": "@traffical/svelte",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "Traffical SDK for Svelte 5 - Provider and hooks for parameter resolution with SSR support",
   "type": "module",
   "svelte": "./src/index.ts",
@@ -31,8 +31,8 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@traffical/core": "workspace:^",
-    "@traffical/js-client": "workspace:^"
+    "@traffical/core": "^0.1.3",
+    "@traffical/js-client": "^0.1.3"
   },
   "devDependencies": {
     "@sveltejs/package": "^2.3.0",
@@ -64,3 +64,4 @@
     "access": "public"
   }
 }
+

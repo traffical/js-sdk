@@ -33,8 +33,7 @@
     "build": "svelte-package --input src",
     "dev": "svelte-package --input src --watch",
     "test": "bun test",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "release": "bun scripts/release.ts"
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
     "@traffical/core": "^0.1.3",

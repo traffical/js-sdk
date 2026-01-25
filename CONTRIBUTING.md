@@ -84,13 +84,67 @@ This monorepo contains multiple packages:
 - Keep functions small and focused
 - Write tests for new functionality
 
-## Versioning
+## Versioning & Releases
 
-We use [Changesets](https://github.com/changesets/changesets) for version management:
+We use [Changesets](https://github.com/changesets/changesets) for version management. **Do not manually edit version numbers in package.json.**
+
+### Version Types
 
 - **patch**: Bug fixes, documentation updates
-- **minor**: New features (backwards compatible)
+- **minor**: New features (backwards compatible)  
 - **major**: Breaking changes
+
+### Creating a Changeset
+
+After making changes, create a changeset to document what changed:
+
+```bash
+bunx changeset
+```
+
+This will prompt you to:
+1. Select which packages were affected
+2. Choose the version bump type (patch/minor/major)
+3. Write a summary of the changes
+
+A markdown file will be created in `.changeset/` - commit this with your code.
+
+### Release Process
+
+Releases happen automatically via GitHub Actions:
+
+1. **Merge to main** - When PRs with changesets are merged, the CI creates a "Version Packages" PR
+2. **Review Version PR** - This PR contains version bumps and changelog updates
+3. **Merge Version PR** - Merging triggers automatic npm publish
+
+### Manual Release (Maintainers)
+
+If you need to release manually:
+
+```bash
+# Consume changesets and bump versions
+bunx changeset version
+
+# Review changes
+git diff
+
+# Commit version bumps
+git add -A
+git commit -m "chore: version packages"
+git push
+
+# Publish to npm (CI does this automatically)
+bunx changeset publish
+```
+
+### Checking Package Versions
+
+To see what's published on npm vs local:
+
+```bash
+npm view @traffical/svelte version   # npm version
+cat packages/svelte/package.json | grep version  # local version
+```
 
 ## Questions?
 

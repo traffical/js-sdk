@@ -1,6 +1,6 @@
 {
   "name": "@traffical/react",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Traffical SDK for React - Provider and hooks for parameter resolution",
   "type": "module",
   "main": "./dist/index.js",

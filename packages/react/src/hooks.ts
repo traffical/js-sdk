@@ -128,6 +128,16 @@ export interface UseTrafficalResult<T> {
    */
   track: (event: string, properties?: Record<string, unknown>) => void;
   /**
+   * Flush all pending events immediately.
+   * Useful after critical conversions (like purchases) before page navigation.
+   *
+   * @example
+   * track('purchase', { value: total });
+   * await flushEvents(); // Ensure event is sent before navigation
+   * router.replace('/checkout/success');
+   */
+  flushEvents: () => Promise<void>;
+  /**
    * @deprecated Use track() instead.
    * Track a reward for this decision. The decisionId is automatically bound.
    * No-op if tracking="none" or no decision is available.
@@ -383,7 +393,13 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
     [client, track]
   );
 
-  return { params, decision, ready, error, trackExposure, track, trackReward };
+  // Flush all pending events immediately
+  const flushEvents = useCallback(async () => {
+    if (!client) return;
+    await client.flushEvents();
+  }, [client]);
+
+  return { params, decision, ready, error, trackExposure, track, flushEvents, trackReward };
 }
 
 // =============================================================================

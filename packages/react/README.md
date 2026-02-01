@@ -101,7 +101,7 @@ Initializes the Traffical client and provides it to child components.
 Primary hook for parameter resolution and decision tracking.
 
 ```tsx
-const { params, decision, ready, error, trackExposure, track } = useTraffical(options);
+const { params, decision, ready, error, trackExposure, track, flushEvents } = useTraffical(options);
 ```
 
 #### Options
@@ -130,6 +130,7 @@ const { params, decision, ready, error, trackExposure, track } = useTraffical(op
 | `error` | `Error \| null` | Any initialization error |
 | `trackExposure` | `() => void` | Manually track exposure (no-op when `tracking="none"`) |
 | `track` | `(event: string, properties?: object) => void` | Track event with bound decisionId (no-op when `tracking="none"`) |
+| `flushEvents` | `() => Promise<void>` | Flush all pending events immediately |
 
 #### Examples
 
@@ -536,6 +537,38 @@ function CheckoutFlow() {
       )}
       <CheckoutForm onComplete={handleComplete} />
     </div>
+  );
+}
+```
+
+### 8. Flushing Events Before Navigation
+
+Ensure critical conversion events are sent before page navigation.
+
+```tsx
+function CheckoutPage() {
+  const router = useRouter();
+  const { params, track, flushEvents } = useTraffical({
+    defaults: {
+      "checkout.ctaText": "Complete Purchase",
+    },
+  });
+
+  const handlePurchase = async (total: number) => {
+    // Track the purchase event
+    track("purchase", { value: total, orderId: "ord_123" });
+    
+    // Flush events immediately to ensure they're sent before navigation
+    await flushEvents();
+    
+    // Now safe to navigate away
+    router.replace("/checkout/success");
+  };
+
+  return (
+    <button onClick={() => handlePurchase(99.99)}>
+      {params["checkout.ctaText"]}
+    </button>
   );
 }
 ```

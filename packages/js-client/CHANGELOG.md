@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.2.4
+
+### Patch Changes
+
+- 815f3ff: Updated the attribution logic in the TrafficalClient to deduplicate entries by layerId and policyId, implementing a last-write-wins approach. This change ensures that only the most recent allocation is credited for per-entity dynamic allocation policies, enhancing the accuracy of event tracking across different product contexts.
+
 ## 0.2.3
 
 ### Patch Changes

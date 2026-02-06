@@ -86,17 +86,19 @@ This monorepo contains multiple packages:
 
 ## Versioning & Releases
 
-We use [Changesets](https://github.com/changesets/changesets) for version management. **Do not manually edit version numbers in package.json.**
+We use [Changesets](https://github.com/changesets/changesets) for version management.
+
+**Do not manually edit version numbers in `package.json`.** Do not manually run `bunx changeset version` or `bunx changeset publish`. All version bumping and npm publishing is fully automated by GitHub Actions (see `.github/workflows/release.yml`).
 
 ### Version Types
 
 - **patch**: Bug fixes, documentation updates
-- **minor**: New features (backwards compatible)  
+- **minor**: New features (backwards compatible)
 - **major**: Breaking changes
 
 ### Creating a Changeset
 
-After making changes, create a changeset to document what changed:
+Your only responsibility is to create a changeset that describes what changed. Run this after making your code changes:
 
 ```bash
 bunx changeset
@@ -107,44 +109,18 @@ This will prompt you to:
 2. Choose the version bump type (patch/minor/major)
 3. Write a summary of the changes
 
-A markdown file will be created in `.changeset/` - commit this with your code.
+A markdown file will be created in `.changeset/` — commit this file alongside your code changes.
 
-### Release Process
+### Release Process (Fully Automated)
 
-Releases happen automatically via GitHub Actions:
+Releases are handled entirely by the GitHub Actions workflow in `.github/workflows/release.yml`. There are no manual steps. The process works as follows:
 
-1. **Merge to main** - When PRs with changesets are merged, the CI creates a "Version Packages" PR
-2. **Review Version PR** - This PR contains version bumps and changelog updates
-3. **Merge Version PR** - Merging triggers automatic npm publish
+1. **You merge your PR to `main`** — Your PR includes code changes and a `.changeset/` file.
+2. **GitHub Actions creates a "Version Packages" PR** — The `changesets/action` detects pending changesets and automatically opens a PR that bumps versions in `package.json` files and updates changelogs.
+3. **A maintainer reviews and merges the "Version Packages" PR** — This is the only review step.
+4. **GitHub Actions publishes to npm** — When the "Version Packages" PR is merged to `main`, the workflow runs again. This time there are no pending changesets, so it runs `bun run release` which publishes all updated packages to npm automatically.
 
-### Manual Release (Maintainers)
-
-If you need to release manually:
-
-```bash
-# Consume changesets and bump versions
-bunx changeset version
-
-# Review changes
-git diff
-
-# Commit version bumps
-git add -A
-git commit -m "chore: version packages"
-git push
-
-# Publish to npm (CI does this automatically)
-bunx changeset publish
-```
-
-### Checking Package Versions
-
-To see what's published on npm vs local:
-
-```bash
-npm view @traffical/svelte version   # npm version
-cat packages/svelte/package.json | grep version  # local version
-```
+That's it. Never run npm publish or changeset publish commands locally.
 
 ## Questions?
 

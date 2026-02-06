@@ -129,7 +129,7 @@ const { params, decision, ready, error, trackExposure, track, flushEvents } = us
 | `ready` | `boolean` | Whether the client is ready |
 | `error` | `Error \| null` | Any initialization error |
 | `trackExposure` | `() => void` | Manually track exposure (no-op when `tracking="none"`) |
-| `track` | `(event: string, properties?: object) => void` | Track event with bound decisionId (no-op when `tracking="none"`) |
+| `track` | `(event: string, properties?: object) => void` | Track event with bound decisionId. Buffers events until decision is ready, so no need to gate on `decision` in `useEffect` deps. No-op when `tracking="none"` |
 | `flushEvents` | `() => Promise<void>` | Flush all pending events immediately |
 
 #### Examples
@@ -746,6 +746,28 @@ const handlePurchase = (amount: number) => {
 const handleAddToCart = () => {
   track("add_to_cart", { itemId: "sku_456" });
 };
+```
+
+**Tracking in `useEffect`:** The `track` function reads the current decision from a ref internally and buffers events if the decision isn't ready yet. You do **not** need `decision` in your dependency array:
+
+```tsx
+const { params, ready, track } = useTraffical({
+  defaults: { "pdp.layout": "default" },
+});
+
+// ✅ Good: only depend on ready + the data you care about
+useEffect(() => {
+  if (ready) {
+    track("page_view", { productId });
+  }
+}, [ready, productId, track]);
+
+// ❌ Avoid: decision in deps can cause duplicate events
+useEffect(() => {
+  if (ready && decision) {
+    track("page_view", { productId });
+  }
+}, [ready, decision, productId, track]);
 ```
 
 ### 4. Use Consistent Naming Conventions

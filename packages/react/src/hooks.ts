@@ -271,6 +271,17 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       return;
     }
 
+    // If we already resolved synchronously in useState, the decision is
+    // already in state (via syncDecisionRef) and tracking was handled by
+    // client.decide() in the initializer. Skip the redundant decide() call
+    // to avoid creating a second DecisionResult with a different decisionId,
+    // which would cause downstream useEffects depending on `decision` to
+    // re-fire and duplicate track events.
+    if (resolvedSyncRef.current) {
+      resolvedSyncRef.current = false;
+      return;
+    }
+
     // Build context using stable references
     const context: Context = {
       ...getContext(),
@@ -284,28 +295,18 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
         defaults: stableDefaults,
       });
 
-      // Only update state if we didn't already resolve synchronously
-      // This prevents the params from flickering (default -> resolved)
-      // But we ALWAYS call decide() to ensure tracking happens
-      if (!resolvedSyncRef.current) {
-        setParams(result.assignments as T);
-      }
+      setParams(result.assignments as T);
       setDecision(result);
       setHasTrackedExposure(false);
     } else {
       // Use getParams() - no tracking
-      if (!resolvedSyncRef.current) {
-        const resolved = client.getParams({
-          context,
-          defaults: stableDefaults,
-        });
-        setParams(resolved as T);
-      }
+      const resolved = client.getParams({
+        context,
+        defaults: stableDefaults,
+      });
+      setParams(resolved as T);
       setDecision(null);
     }
-
-    // Clear the sync flag after first effect run
-    resolvedSyncRef.current = false;
   }, [client, ready, getContext, stableContext, stableDefaults, shouldTrackDecision]);
 
   // Auto-track exposure when tracking is "full"

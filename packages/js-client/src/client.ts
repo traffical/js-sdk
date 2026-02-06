@@ -88,6 +88,14 @@ export interface TrafficalClientOptions {
   storage?: StorageProvider;
   /** Disable automatic stable ID generation */
   disableAutoStableId?: boolean;
+  /**
+   * Attribution mode for track events (default: "cumulative").
+   * - "cumulative": Attributes to ALL layers the user was exposed to in this session.
+   *   Best for cross-page funnels (catalog -> PDP -> checkout).
+   * - "decision": Attributes only to the layers from the specific decision.
+   *   Use when strict single-decision attribution is required.
+   */
+  attributionMode?: "cumulative" | "decision";
 }
 
 interface ClientState {
@@ -106,7 +114,7 @@ interface ClientState {
 export class TrafficalClient {
   private readonly _options: Required<
     Pick<TrafficalClientOptions, "orgId" | "projectId" | "env" | "apiKey" | "baseUrl" | "refreshIntervalMs">
-  > & { localConfig?: ConfigBundle };
+  > & { localConfig?: ConfigBundle; attributionMode: "cumulative" | "decision" };
 
   private _state: ClientState = {
     bundle: null,
@@ -135,6 +143,7 @@ export class TrafficalClient {
       baseUrl: options.baseUrl ?? DEFAULT_BASE_URL,
       localConfig: options.localConfig,
       refreshIntervalMs: options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
+      attributionMode: options.attributionMode ?? "cumulative",
     };
 
     // Initialize components
@@ -398,21 +407,9 @@ export class TrafficalClient {
         const unitKey = options?.unitKey ?? this._stableId.getId();
         const value = typeof properties?.value === 'number' ? properties.value : undefined;
 
-        // Auto-populate attribution from cached decision if available
-        let attribution: TrackAttribution[] | undefined;
+        // Auto-populate attribution from cached decisions
+        const attribution = this._buildAttribution(unitKey, options?.decisionId);
         const decisionId = options?.decisionId;
-        if (decisionId) {
-          const cachedDecision = this._decisionCache.get(decisionId);
-          if (cachedDecision) {
-            attribution = cachedDecision.metadata.layers
-              .filter((l) => l.policyId && l.allocationName)
-              .map((l) => ({
-                layerId: l.layerId,
-                policyId: l.policyId!,
-                allocationName: l.allocationName!,
-              }));
-          }
-        }
 
         const event: TrackEvent = {
           type: "track",
@@ -583,6 +580,58 @@ export class TrafficalClient {
       }
     }
     this._decisionCache.set(decision.decisionId, decision);
+  }
+
+  /**
+   * Builds attribution for a track event based on the configured attribution mode.
+   *
+   * - "cumulative": Collects layers from ALL cached decisions for this unit,
+   *   deduplicated by layerId:policyId:allocationName. This ensures cross-page
+   *   funnels (e.g., catalog -> PDP -> checkout) attribute correctly to all
+   *   experiments the user is exposed to.
+   *
+   * - "decision": Only uses layers from the single decision matching decisionId.
+   *   Legacy behavior for strict single-decision attribution.
+   */
+  private _buildAttribution(
+    unitKey: string,
+    decisionId?: string
+  ): TrackAttribution[] | undefined {
+    if (this._options.attributionMode === "decision") {
+      // Legacy behavior: single-decision attribution
+      if (!decisionId) return undefined;
+      const cachedDecision = this._decisionCache.get(decisionId);
+      if (!cachedDecision) return undefined;
+      return cachedDecision.metadata.layers
+        .filter((l) => l.policyId && l.allocationName)
+        .map((l) => ({
+          layerId: l.layerId,
+          policyId: l.policyId!,
+          allocationName: l.allocationName!,
+        }));
+    }
+
+    // Cumulative mode: collect attribution from ALL cached decisions for this unit.
+    // Deduplicate by layerId:policyId:allocationName to avoid duplicate entries
+    // when the same layer is resolved by multiple hooks/pages.
+    const attrMap = new Map<string, TrackAttribution>();
+    for (const cachedDecision of this._decisionCache.values()) {
+      // Only include decisions for the same unit to prevent cross-user attribution
+      if (cachedDecision.metadata.unitKeyValue !== unitKey) continue;
+      for (const l of cachedDecision.metadata.layers) {
+        if (!l.policyId || !l.allocationName) continue;
+        const key = `${l.layerId}:${l.policyId}:${l.allocationName}`;
+        if (!attrMap.has(key)) {
+          attrMap.set(key, {
+            layerId: l.layerId,
+            policyId: l.policyId,
+            allocationName: l.allocationName,
+          });
+        }
+      }
+    }
+
+    return attrMap.size > 0 ? Array.from(attrMap.values()) : undefined;
   }
 }
 

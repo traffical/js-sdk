@@ -586,9 +586,11 @@ export class TrafficalClient {
    * Builds attribution for a track event based on the configured attribution mode.
    *
    * - "cumulative": Collects layers from ALL cached decisions for this unit,
-   *   deduplicated by layerId:policyId:allocationName. This ensures cross-page
+   *   deduplicated by layerId:policyId (last-write-wins). This ensures cross-page
    *   funnels (e.g., catalog -> PDP -> checkout) attribute correctly to all
-   *   experiments the user is exposed to.
+   *   experiments the user is exposed to. For per-entity dynamic allocation
+   *   policies, only the most recent allocation is kept to avoid attributing
+   *   rewards to allocations from other entities (e.g., different products).
    *
    * - "decision": Only uses layers from the single decision matching decisionId.
    *   Legacy behavior for strict single-decision attribution.
@@ -612,22 +614,25 @@ export class TrafficalClient {
     }
 
     // Cumulative mode: collect attribution from ALL cached decisions for this unit.
-    // Deduplicate by layerId:policyId:allocationName to avoid duplicate entries
-    // when the same layer is resolved by multiple hooks/pages.
+    // Deduplicate by layerId:policyId (last-write-wins) so that for per-entity
+    // dynamic allocation policies, only the MOST RECENT allocation is kept.
+    // This is critical because each product page resolves a different allocation
+    // index, and the track event should only credit the allocation matching the
+    // most recent context (e.g., the product currently being viewed).
+    // For normal policies this is a no-op since the allocationName is deterministic.
     const attrMap = new Map<string, TrackAttribution>();
     for (const cachedDecision of this._decisionCache.values()) {
       // Only include decisions for the same unit to prevent cross-user attribution
       if (cachedDecision.metadata.unitKeyValue !== unitKey) continue;
       for (const l of cachedDecision.metadata.layers) {
         if (!l.policyId || !l.allocationName) continue;
-        const key = `${l.layerId}:${l.policyId}:${l.allocationName}`;
-        if (!attrMap.has(key)) {
-          attrMap.set(key, {
-            layerId: l.layerId,
-            policyId: l.policyId,
-            allocationName: l.allocationName,
-          });
-        }
+        const key = `${l.layerId}:${l.policyId}`;
+        // Last-write-wins: later decisions (more recent) overwrite earlier ones
+        attrMap.set(key, {
+          layerId: l.layerId,
+          policyId: l.policyId,
+          allocationName: l.allocationName,
+        });
       }
     }
 

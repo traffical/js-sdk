@@ -1,5 +1,11 @@
 # @traffical/react
 
+## 0.2.7
+
+### Patch Changes
+
+- 1d15188: improve useTraffical() hook regarding synchronous decision resolution on avoiding redundant calls to `decide()`
+
 ## 0.2.6
 
 ### Patch Changes

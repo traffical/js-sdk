@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.2.3
+
+### Patch Changes
+
+- c71c3ad: feat(js-client): add attributionMode option for track events
+
 ## 0.2.2
 
 ### Patch Changes

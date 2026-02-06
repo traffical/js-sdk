@@ -1,6 +1,6 @@
 {
   "name": "@traffical/js-client",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Traffical JavaScript SDK for browser environments",
   "type": "module",
   "main": "./dist/index.js",

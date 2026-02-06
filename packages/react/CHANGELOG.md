@@ -1,5 +1,13 @@
 # @traffical/react
 
+## 0.2.5
+
+### Patch Changes
+
+- c71c3ad: feat(js-client): add attributionMode option for track events
+- Updated dependencies [c71c3ad]
+  - @traffical/js-client@0.2.3
+
 ## 0.2.4
 
 ### Patch Changes

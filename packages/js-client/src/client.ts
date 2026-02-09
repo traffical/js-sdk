@@ -133,6 +133,14 @@ export class TrafficalClient {
   private readonly _plugins: PluginManager;
   /** Cache of recent decisions for attribution lookup when track() is called */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
+  /**
+   * Cumulative attribution map, keyed by unitKey → layerId:policyId → TrackAttribution.
+   * Unlike _decisionCache (bounded to DECISION_CACHE_MAX_SIZE), this map accumulates
+   * every attribution entry from every decide() call during the session. This prevents
+   * attribution loss when per-entity policies (e.g. per-product OptimizedProductCards)
+   * flood the decision cache and evict earlier page-level decisions.
+   */
+  private readonly _cumulativeAttribution: Map<string, Map<string, TrackAttribution>> = new Map();
 
   constructor(options: TrafficalClientOptions) {
     this._options = {
@@ -310,6 +318,8 @@ export class TrafficalClient {
 
         // Cache decision for attribution lookup when track() is called
         this._cacheDecision(decision);
+        // Accumulate attribution entries (survives decision cache eviction)
+        this._updateCumulativeAttribution(decision);
 
         // Run plugin onDecision hooks (e.g., DOM binding plugin)
         this._plugins.runDecision(decision);
@@ -583,6 +593,36 @@ export class TrafficalClient {
   }
 
   /**
+   * Accumulates attribution entries from a decision into the session-level map.
+   * Keyed by unitKey → layerId:policyId with last-write-wins semantics.
+   * This ensures attribution survives decision cache eviction.
+   */
+  private _updateCumulativeAttribution(decision: DecisionResult): void {
+    const unitKey = decision.metadata.unitKeyValue;
+    if (!unitKey) return;
+
+    let userAttrs = this._cumulativeAttribution.get(unitKey);
+    if (!userAttrs) {
+      userAttrs = new Map<string, TrackAttribution>();
+      this._cumulativeAttribution.set(unitKey, userAttrs);
+    }
+
+    for (const l of decision.metadata.layers) {
+      if (!l.policyId || !l.allocationName) continue;
+      const key = `${l.layerId}:${l.policyId}`;
+      // Last-write-wins: later decisions overwrite earlier ones.
+      // For per-entity dynamic allocation policies this keeps only the most
+      // recent allocation; for normal policies allocationName is deterministic
+      // so the overwrite is a no-op.
+      userAttrs.set(key, {
+        layerId: l.layerId,
+        policyId: l.policyId,
+        allocationName: l.allocationName,
+      });
+    }
+  }
+
+  /**
    * Builds attribution for a track event based on the configured attribution mode.
    *
    * - "cumulative": Collects layers from ALL cached decisions for this unit,
@@ -613,30 +653,16 @@ export class TrafficalClient {
         }));
     }
 
-    // Cumulative mode: collect attribution from ALL cached decisions for this unit.
-    // Deduplicate by layerId:policyId (last-write-wins) so that for per-entity
-    // dynamic allocation policies, only the MOST RECENT allocation is kept.
-    // This is critical because each product page resolves a different allocation
-    // index, and the track event should only credit the allocation matching the
-    // most recent context (e.g., the product currently being viewed).
-    // For normal policies this is a no-op since the allocationName is deterministic.
-    const attrMap = new Map<string, TrackAttribution>();
-    for (const cachedDecision of this._decisionCache.values()) {
-      // Only include decisions for the same unit to prevent cross-user attribution
-      if (cachedDecision.metadata.unitKeyValue !== unitKey) continue;
-      for (const l of cachedDecision.metadata.layers) {
-        if (!l.policyId || !l.allocationName) continue;
-        const key = `${l.layerId}:${l.policyId}`;
-        // Last-write-wins: later decisions (more recent) overwrite earlier ones
-        attrMap.set(key, {
-          layerId: l.layerId,
-          policyId: l.policyId,
-          allocationName: l.allocationName,
-        });
-      }
-    }
-
-    return attrMap.size > 0 ? Array.from(attrMap.values()) : undefined;
+    // Cumulative mode: use the pre-built cumulative attribution map.
+    // This map accumulates entries from ALL decide() calls for this unit during
+    // the session, deduplicated by layerId:policyId (last-write-wins).
+    // Unlike iterating _decisionCache, this is immune to cache eviction —
+    // e.g. when per-entity OptimizedProductCard decisions push out earlier
+    // page-level decisions that contain important layer assignments.
+    const userAttrs = this._cumulativeAttribution.get(unitKey);
+    return userAttrs && userAttrs.size > 0
+      ? Array.from(userAttrs.values())
+      : undefined;
   }
 }
 

@@ -271,16 +271,22 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       return;
     }
 
-    // If we already resolved synchronously in useState, the decision is
-    // already in state (via syncDecisionRef) and tracking was handled by
-    // client.decide() in the initializer. Skip the redundant decide() call
-    // to avoid creating a second DecisionResult with a different decisionId,
-    // which would cause downstream useEffects depending on `decision` to
-    // re-fire and duplicate track events.
-    if (resolvedSyncRef.current) {
+    // If we already called client.decide() synchronously in useState (i.e.,
+    // client was ready at mount time), the decision is already in state
+    // (via syncDecisionRef) and tracking was handled by the initializer.
+    // Skip the redundant decide() call to avoid creating a second
+    // DecisionResult with a different decisionId, which would cause
+    // downstream useEffects depending on `decision` to re-fire.
+    //
+    // IMPORTANT: Only skip if syncDecisionRef is set. When localConfig
+    // resolved params via resolveParameters() (not decide()), we still
+    // need decide() here to cache the decision for attribution and to
+    // fire the DecisionTrackingPlugin.
+    if (resolvedSyncRef.current && syncDecisionRef.current) {
       resolvedSyncRef.current = false;
       return;
     }
+    resolvedSyncRef.current = false;
 
     // Build context using stable references
     const context: Context = {

@@ -1,6 +1,6 @@
 {
   "name": "@traffical/svelte",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Traffical SDK for Svelte 5 - Provider and hooks for parameter resolution with SSR support",
   "type": "module",
   "svelte": "./dist/index.js",
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@traffical/core": "0.2.2",
-    "@traffical/js-client": "0.2.4",
+    "@traffical/js-client": "0.2.5",
     "@traffical/node": "0.2.2"
   },
   "devDependencies": {

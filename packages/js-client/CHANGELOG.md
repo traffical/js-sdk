@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.2.5
+
+### Patch Changes
+
+- 1d5befe: implement cumulative attribution map to prevent loss during decision cache eviction
+
 ## 0.2.4
 
 ### Patch Changes

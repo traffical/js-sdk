@@ -1,5 +1,13 @@
 # @traffical/react
 
+## 0.2.8
+
+### Patch Changes
+
+- 1d5befe: implement cumulative attribution map to prevent loss during decision cache eviction
+- Updated dependencies [1d5befe]
+  - @traffical/js-client@0.2.5
+
 ## 0.2.7
 
 ### Patch Changes

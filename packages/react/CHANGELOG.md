@@ -1,5 +1,14 @@
 # @traffical/react
 
+## 0.2.9
+
+### Patch Changes
+
+- 8cea5c1: Remove broken "bun" export condition from package.json exports map. The condition pointed to ./src/index.ts which is not included in the published npm tarball (only dist/ is shipped), causing a hard "Cannot find module" error for any Bun user consuming these packages from npm.
+- Updated dependencies [8cea5c1]
+  - @traffical/core@0.2.3
+  - @traffical/js-client@0.2.6
+
 ## 0.2.8
 
 ### Patch Changes

@@ -345,6 +345,10 @@ export class TrafficalClient {
   /**
    * Tracks an exposure event.
    * Automatically deduplicates exposures for the same user/variant.
+   *
+   * Skips layers marked `attributionOnly` — those were resolved for
+   * attribution/assignment purposes only (no parameters were requested
+   * from that layer) and should not count as exposures.
    */
   trackExposure(decision: DecisionResult): void {
     this._errorBoundary.capture(
@@ -356,6 +360,10 @@ export class TrafficalClient {
         // Check each layer for deduplication
         for (const layer of decision.metadata.layers) {
           if (!layer.policyId || !layer.allocationName) continue;
+
+          // Skip attribution-only layers — the user wasn't exposed to
+          // parameters from this layer, so no exposure event should fire.
+          if (layer.attributionOnly) continue;
 
           // Deduplicate
           const isNew = this._exposureDedup.checkAndMark(unitKey, layer.policyId, layer.allocationName);

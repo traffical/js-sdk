@@ -323,12 +323,22 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
     paramsByLayer.set(param.layerId, existing);
   }
 
-  // Process each layer (order doesn't matter since params are partitioned)
+  // Process ALL layers for both parameter resolution and attribution.
+  //
+  // Layers with matching parameters get their overrides applied (parameter
+  // resolution). Layers WITHOUT matching parameters are still processed for
+  // bucket/policy/allocation matching so that decision events and track-event
+  // attribution include the full set of experiments the user is assigned to.
+  //
+  // The `attributionOnly` flag distinguishes the two: layers resolved only for
+  // attribution are marked `attributionOnly: true`, which tells trackExposure()
+  // to skip them (avoiding exposure inflation for experiments the user didn't
+  // actually see).
   for (const layer of bundle.layers) {
     const layerParams = paramsByLayer.get(layer.id);
-    if (!layerParams || layerParams.length === 0) continue;
+    const hasParams = layerParams && layerParams.length > 0;
 
-    // Compute bucket
+    // Compute bucket (needed for both parameter resolution and attribution)
     const bucket = computeBucket(
       unitKeyValue,
       layer.id,
@@ -363,17 +373,19 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
           // Track matched policy for context filtering
           matchedPolicies.push(policy);
 
-          // Apply overrides
-          // For dynamic allocations, the allocation name IS the value
-          if (policy.entityConfig.dynamicAllocations) {
-            // For per-entity dynamic policies, we return the selected index
-            // The SDK caller should use metadata.allocationName to get the index
-            // No parameter overrides to apply in this mode
-          } else {
-            // For fixed allocations, apply normal overrides
-            for (const [key, value] of Object.entries(result.allocation.overrides)) {
-              if (key in assignments) {
-                assignments[key] = value;
+          // Apply overrides only if this layer has matching parameters
+          if (hasParams) {
+            // For dynamic allocations, the allocation name IS the value
+            if (policy.entityConfig.dynamicAllocations) {
+              // For per-entity dynamic policies, we return the selected index
+              // The SDK caller should use metadata.allocationName to get the index
+              // No parameter overrides to apply in this mode
+            } else {
+              // For fixed allocations, apply normal overrides
+              for (const [key, value] of Object.entries(result.allocation.overrides)) {
+                if (key in assignments) {
+                  assignments[key] = value;
+                }
               }
             }
           }
@@ -394,10 +406,12 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
           // Track matched policy for context filtering
           matchedPolicies.push(policy);
 
-          // Apply overrides
-          for (const [key, value] of Object.entries(allocation.overrides)) {
-            if (key in assignments) {
-              assignments[key] = value;
+          // Apply overrides only if this layer has matching parameters
+          if (hasParams) {
+            for (const [key, value] of Object.entries(allocation.overrides)) {
+              if (key in assignments) {
+                assignments[key] = value;
+              }
             }
           }
           break; // Only one policy per layer
@@ -411,6 +425,10 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       policyId: matchedPolicy?.id,
       allocationId: matchedAllocation?.id,
       allocationName: matchedAllocation?.name,
+      // Mark layers without requested parameters as attribution-only.
+      // These are included in decision events and track-event attribution
+      // but skipped by trackExposure() to avoid exposure inflation.
+      ...(hasParams ? {} : { attributionOnly: true }),
     });
   }
 

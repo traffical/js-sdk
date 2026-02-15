@@ -297,6 +297,16 @@ export interface LayerResolution {
   allocationId?: Id;
   /** The allocation/variant name that was selected (if any) */
   allocationName?: string;
+  /**
+   * When true, this layer was resolved for attribution/assignment purposes only —
+   * no parameters from this layer were requested by the caller.
+   *
+   * Attribution-only layers are included in decision events and track-event
+   * attribution (enabling intent-to-treat analysis and metric joins) but are
+   * skipped by `trackExposure()` to avoid inflating exposure counts for
+   * experiments the user didn't actually see.
+   */
+  attributionOnly?: boolean;
 }
 
 /**

@@ -239,3 +239,129 @@ describe("decide", () => {
     expect(decision.metadata.layers).toHaveLength(0);
   });
 });
+
+// =============================================================================
+// Attribution-only layers (decoupled attribution from parameter resolution)
+// =============================================================================
+
+describe("decide - attribution-only layers", () => {
+  const bundle = bundleBasic as unknown as ConfigBundle;
+
+  test("layers with matching params are NOT marked attributionOnly", () => {
+    const decision = decide(bundle, { userId: "user-abc" }, basicDefaults);
+
+    // Both layers have matching params in basicDefaults
+    for (const layer of decision.metadata.layers) {
+      expect(layer.attributionOnly).toBeUndefined();
+    }
+  });
+
+  test("layers without matching params ARE marked attributionOnly", () => {
+    // Only request ui.primaryColor — layer_ui has params, layer_pricing does not
+    const decision = decide(bundle, { userId: "user-abc" }, {
+      "ui.primaryColor": "#FFFFFF",
+    });
+
+    expect(decision.metadata.layers).toHaveLength(2);
+
+    const uiLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_ui"
+    );
+    expect(uiLayer).toBeDefined();
+    expect(uiLayer!.attributionOnly).toBeUndefined(); // has matching params
+    expect(uiLayer!.policyId).toBe("policy_color_test");
+    expect(uiLayer!.allocationName).toBe("treatment");
+
+    const pricingLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_pricing"
+    );
+    expect(pricingLayer).toBeDefined();
+    expect(pricingLayer!.attributionOnly).toBe(true); // no matching params
+    // Still resolved for attribution: bucket computed, policy matched
+    expect(pricingLayer!.bucket).toBe(913);
+  });
+
+  test("empty defaults produces all layers as attributionOnly", () => {
+    const decision = decide(bundle, { userId: "user-abc" }, {});
+
+    expect(decision.metadata.layers).toHaveLength(2);
+
+    for (const layer of decision.metadata.layers) {
+      expect(layer.attributionOnly).toBe(true);
+    }
+
+    // Verify bucket computation and policy matching still happened
+    const uiLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_ui"
+    );
+    expect(uiLayer!.bucket).toBe(551);
+    expect(uiLayer!.policyId).toBe("policy_color_test");
+    expect(uiLayer!.allocationName).toBe("treatment");
+  });
+
+  test("empty defaults does NOT modify assignments", () => {
+    const decision = decide(bundle, { userId: "user-abc" }, {});
+
+    // Assignments should be the empty defaults — no overrides applied
+    expect(Object.keys(decision.assignments)).toHaveLength(0);
+  });
+
+  test("attribution-only layers do not apply parameter overrides", () => {
+    // Request only ui params. pricing layer should NOT apply overrides
+    // even though user-xyz has bucket 42 which matches discount_10.
+    const decision = decide(bundle, { userId: "user-xyz" }, {
+      "ui.primaryColor": "#FFFFFF",
+    });
+
+    // Only ui.primaryColor should be in assignments
+    expect(Object.keys(decision.assignments)).toEqual(["ui.primaryColor"]);
+    // pricing.discount should NOT appear in assignments
+    expect(decision.assignments["pricing.discount"]).toBeUndefined();
+
+    // But pricing layer is still resolved for attribution
+    const pricingLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_pricing"
+    );
+    expect(pricingLayer!.attributionOnly).toBe(true);
+    expect(pricingLayer!.bucket).toBe(42);
+    expect(pricingLayer!.policyId).toBe("policy_discount");
+    expect(pricingLayer!.allocationName).toBe("discount_10");
+  });
+
+  test("decisionId is generated even with empty defaults", () => {
+    const decision = decide(bundle, { userId: "user-abc" }, {});
+
+    expect(decision.decisionId).toMatch(/^dec_/);
+    expect(decision.metadata.unitKeyValue).toBe("user-abc");
+    expect(decision.metadata.timestamp).toBeDefined();
+  });
+
+  test("requesting params from one layer does not affect the other", () => {
+    // Request only pricing params
+    const decision = decide(bundle, { userId: "user-xyz" }, {
+      "pricing.discount": 0,
+    });
+
+    expect(decision.metadata.layers).toHaveLength(2);
+
+    const uiLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_ui"
+    );
+    expect(uiLayer!.attributionOnly).toBe(true);
+    // Still resolved: bucket + policy matching happened
+    expect(uiLayer!.bucket).toBe(214);
+    expect(uiLayer!.policyId).toBe("policy_color_test");
+    expect(uiLayer!.allocationName).toBe("control");
+
+    const pricingLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_pricing"
+    );
+    expect(pricingLayer!.attributionOnly).toBeUndefined(); // has matching params
+    expect(pricingLayer!.policyId).toBe("policy_discount");
+    expect(pricingLayer!.allocationName).toBe("discount_10");
+
+    // Only pricing.discount in assignments (with override applied)
+    expect(decision.assignments["pricing.discount"]).toBe(10);
+    expect(decision.assignments["ui.primaryColor"]).toBeUndefined();
+  });
+});

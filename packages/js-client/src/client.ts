@@ -19,12 +19,22 @@ import {
   type TrackEvent,
   type TrackAttribution,
   type DecisionEvent,
+  type BundlePolicy,
+  type ServerResolveResponse,
+  type ResolveOptions,
   resolveParameters,
   decide as coreDecide,
+  getUnitKeyValue,
   generateExposureId,
   generateTrackEventId,
   generateDecisionId,
 } from "@traffical/core";
+
+import {
+  DecisionClient,
+  createEdgeDecideRequest,
+  type DecisionClientConfig,
+} from "@traffical/core-io";
 
 import { ErrorBoundary, type ErrorBoundaryOptions } from "./error-boundary.js";
 import { EventLogger } from "./event-logger.js";
@@ -96,6 +106,12 @@ export interface TrafficalClientOptions {
    *   Use when strict single-decision attribution is required.
    */
   attributionMode?: "cumulative" | "decision";
+  /**
+   * Evaluation mode (default: "bundle").
+   * - "bundle": SDK fetches config bundle, resolves parameters locally.
+   * - "server": SDK delegates resolution to the edge worker via POST /v1/resolve.
+   */
+  evaluationMode?: "bundle" | "server";
 }
 
 interface ClientState {
@@ -105,6 +121,10 @@ interface ClientState {
   lastOfflineWarning: number;
   refreshTimer: ReturnType<typeof setInterval> | null;
   isInitialized: boolean;
+  /** Cached server resolve response (server mode only) */
+  serverResponse: ServerResolveResponse | null;
+  /** Cached edge results for bundle mode with edge policies */
+  cachedEdgeResults: ResolveOptions | null;
 }
 
 // =============================================================================
@@ -114,7 +134,11 @@ interface ClientState {
 export class TrafficalClient {
   private readonly _options: Required<
     Pick<TrafficalClientOptions, "orgId" | "projectId" | "env" | "apiKey" | "baseUrl" | "refreshIntervalMs">
-  > & { localConfig?: ConfigBundle; attributionMode: "cumulative" | "decision" };
+  > & {
+    localConfig?: ConfigBundle;
+    attributionMode: "cumulative" | "decision";
+    evaluationMode: "bundle" | "server";
+  };
 
   private _state: ClientState = {
     bundle: null,
@@ -123,6 +147,8 @@ export class TrafficalClient {
     lastOfflineWarning: 0,
     refreshTimer: null,
     isInitialized: false,
+    serverResponse: null,
+    cachedEdgeResults: null,
   };
 
   private readonly _errorBoundary: ErrorBoundary;
@@ -131,6 +157,7 @@ export class TrafficalClient {
   private readonly _exposureDedup: ExposureDeduplicator;
   private readonly _stableId: StableIdProvider;
   private readonly _plugins: PluginManager;
+  private readonly _decisionClient: DecisionClient | null;
   /** Cache of recent decisions for attribution lookup when track() is called */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
   /**
@@ -143,6 +170,7 @@ export class TrafficalClient {
   private readonly _cumulativeAttribution: Map<string, Map<string, TrackAttribution>> = new Map();
 
   constructor(options: TrafficalClientOptions) {
+    const evaluationMode = options.evaluationMode ?? "bundle";
     this._options = {
       orgId: options.orgId,
       projectId: options.projectId,
@@ -152,7 +180,18 @@ export class TrafficalClient {
       localConfig: options.localConfig,
       refreshIntervalMs: options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
       attributionMode: options.attributionMode ?? "cumulative",
+      evaluationMode,
     };
+
+    // Create DecisionClient when needed (server mode, or bundle mode may use for edge policies)
+    const decisionClientConfig: DecisionClientConfig = {
+      baseUrl: this._options.baseUrl,
+      orgId: this._options.orgId,
+      projectId: this._options.projectId,
+      env: this._options.env,
+      apiKey: this._options.apiKey,
+    };
+    this._decisionClient = new DecisionClient(decisionClientConfig);
 
     // Initialize components
     this._errorBoundary = new ErrorBoundary(options.errorBoundary);
@@ -222,7 +261,11 @@ export class TrafficalClient {
     await this._errorBoundary.captureAsync(
       "initialize",
       async () => {
-        await this._fetchConfig();
+        if (this._options.evaluationMode === "server") {
+          await this._fetchServerResolve();
+        } else {
+          await this._fetchConfig();
+        }
         this._startBackgroundRefresh();
         this._state.isInitialized = true;
 
@@ -266,7 +309,11 @@ export class TrafficalClient {
    */
   async refreshConfig(): Promise<void> {
     await this._errorBoundary.swallow("refreshConfig", async () => {
-      await this._fetchConfig();
+      if (this._options.evaluationMode === "server") {
+        await this._fetchServerResolve();
+      } else {
+        await this._fetchConfig();
+      }
     });
   }
 
@@ -274,7 +321,7 @@ export class TrafficalClient {
    * Gets the current config bundle version.
    */
   getConfigVersion(): string | null {
-    return this._state.bundle?.version ?? null;
+    return this._state.serverResponse?.stateVersion ?? this._state.bundle?.version ?? null;
   }
 
   // ===========================================================================
@@ -288,6 +335,18 @@ export class TrafficalClient {
     return this._errorBoundary.capture(
       "getParams",
       () => {
+        // Server mode: return from cached server response
+        if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+          const result = { ...options.defaults } as Record<string, ParameterValue>;
+          for (const [key, value] of Object.entries(this._state.serverResponse.assignments)) {
+            if (key in result) {
+              result[key] = value;
+            }
+          }
+          this._plugins.runResolve(result as T);
+          return result as T;
+        }
+
         const bundle = this._getEffectiveBundle();
         const context = this._enrichContext(options.context);
         const params = resolveParameters<T>(bundle, context, options.defaults);
@@ -308,13 +367,35 @@ export class TrafficalClient {
     return this._errorBoundary.capture(
       "decide",
       () => {
+        // Server mode: return from cached server response
+        if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+          const resp = this._state.serverResponse;
+          const assignments = { ...options.defaults } as Record<string, ParameterValue>;
+          for (const [key, value] of Object.entries(resp.assignments)) {
+            if (key in assignments) {
+              assignments[key] = value;
+            }
+          }
+          const decision: DecisionResult = {
+            decisionId: resp.decisionId,
+            assignments,
+            metadata: resp.metadata,
+          };
+          this._cacheDecision(decision);
+          this._updateCumulativeAttribution(decision);
+          this._plugins.runDecision(decision);
+          return decision;
+        }
+
         const bundle = this._getEffectiveBundle();
 
         // Run plugin onBeforeDecision hooks
         let context = this._enrichContext(options.context);
         context = this._plugins.runBeforeDecision(context);
 
-        const decision = coreDecide<T>(bundle, context, options.defaults);
+        // Pass cached edge results (from bundle mode pre-fetch) if available
+        const edgeOpts = this._state.cachedEdgeResults ?? undefined;
+        const decision = coreDecide<T>(bundle, context, options.defaults, edgeOpts);
 
         // Cache decision for attribution lookup when track() is called
         this._cacheDecision(decision);
@@ -557,6 +638,14 @@ export class TrafficalClient {
       this._state.etag = etag;
       this._state.lastFetchTime = Date.now();
 
+      // Pre-fetch edge results if bundle has edge-mode policies
+      if (this._findEdgePolicies(bundle).length > 0) {
+        const edgeResults = await this._prefetchEdgeResults(bundle, this._enrichContext({}));
+        this._state.cachedEdgeResults = edgeResults;
+      } else {
+        this._state.cachedEdgeResults = null;
+      }
+
       // Run plugin onConfigUpdate hooks (e.g., DOM binding plugin)
       this._plugins.runConfigUpdate(bundle);
     } catch (error) {
@@ -565,13 +654,109 @@ export class TrafficalClient {
   }
 
   private _startBackgroundRefresh(): void {
-    if (this._options.refreshIntervalMs <= 0) return;
+    const interval = this._options.evaluationMode === "server"
+      ? (this._state.serverResponse?.suggestedRefreshMs ?? this._options.refreshIntervalMs)
+      : this._options.refreshIntervalMs;
+
+    if (interval <= 0) return;
 
     this._state.refreshTimer = setInterval(() => {
-      this._fetchConfig().catch(() => {
-        // Errors logged in _fetchConfig
-      });
-    }, this._options.refreshIntervalMs);
+      if (this._options.evaluationMode === "server") {
+        this._fetchServerResolve().catch(() => {});
+      } else {
+        this._fetchConfig().catch(() => {});
+      }
+    }, interval);
+  }
+
+  private async _fetchServerResolve(): Promise<void> {
+    if (!this._decisionClient) return;
+
+    try {
+      const context = this._enrichContext({});
+      const response = await this._decisionClient.resolve({ context });
+      if (response) {
+        this._state.serverResponse = response;
+        this._state.lastFetchTime = Date.now();
+      }
+    } catch (error) {
+      this._logOfflineWarning(error);
+    }
+  }
+
+  /**
+   * Finds edge-mode policies in the current bundle.
+   */
+  private _findEdgePolicies(bundle: ConfigBundle): BundlePolicy[] {
+    const policies: BundlePolicy[] = [];
+    for (const layer of bundle.layers) {
+      for (const policy of layer.policies) {
+        if (
+          policy.state === "running" &&
+          policy.entityConfig?.resolutionMode === "edge"
+        ) {
+          policies.push(policy);
+        }
+      }
+    }
+    return policies;
+  }
+
+  /**
+   * Pre-fetches edge results for edge-mode policies in bundle mode.
+   * Returns ResolveOptions with edgeResults populated.
+   */
+  private async _prefetchEdgeResults(
+    bundle: ConfigBundle,
+    context: Context
+  ): Promise<ResolveOptions> {
+    if (!this._decisionClient) return {};
+
+    const edgePolicies = this._findEdgePolicies(bundle);
+    if (edgePolicies.length === 0) return {};
+
+    const unitKeyValue = getUnitKeyValue(bundle, context);
+    if (!unitKeyValue) return {};
+
+    const requests = edgePolicies
+      .map((policy) => {
+        if (!policy.entityConfig) return null;
+        const allocationCount = policy.entityConfig.dynamicAllocations
+          ? (typeof context[policy.entityConfig.dynamicAllocations.countKey] === "number"
+            ? Math.floor(context[policy.entityConfig.dynamicAllocations.countKey] as number)
+            : 0)
+          : policy.allocations.length;
+
+        return createEdgeDecideRequest(
+          policy.id,
+          policy.entityConfig.entityKeys,
+          context,
+          unitKeyValue,
+          allocationCount || undefined
+        );
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    if (requests.length === 0) return {};
+
+    try {
+      const responses = await this._decisionClient.decideEntityBatch(requests);
+      const edgeResults = new Map<string, { allocationIndex: number; entityId: string }>();
+
+      for (let i = 0; i < requests.length; i++) {
+        const resp = responses[i];
+        if (resp) {
+          edgeResults.set(requests[i].policyId, {
+            allocationIndex: resp.allocationIndex,
+            entityId: requests[i].entityId,
+          });
+        }
+      }
+
+      return edgeResults.size > 0 ? { edgeResults } : {};
+    } catch {
+      return {};
+    }
   }
 
   private _logOfflineWarning(error: unknown): void {

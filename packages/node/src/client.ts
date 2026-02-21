@@ -23,12 +23,15 @@ import {
   type TrackEvent,
   type TrackAttribution,
   type DecisionEvent,
+  type ServerResolveResponse,
   resolveParameters,
   decide as coreDecide,
   DecisionDeduplicator,
   generateExposureId,
   generateTrackEventId,
 } from "@traffical/core";
+
+import { DecisionClient } from "@traffical/core-io";
 
 import { EventBatcher } from "./event-batcher.js";
 
@@ -76,6 +79,12 @@ export interface TrafficalClientOptions extends CoreClientOptions {
    * Enable debug logging for events (default: false).
    */
   debugEvents?: boolean;
+  /**
+   * Evaluation mode (default: "bundle").
+   * - "bundle": SDK fetches config bundle, resolves parameters locally.
+   * - "server": SDK delegates resolution to the edge worker via POST /v1/resolve.
+   */
+  evaluationMode?: "bundle" | "server";
 }
 
 // =============================================================================
@@ -89,6 +98,7 @@ interface ClientState {
   lastOfflineWarning: number;
   refreshTimer: ReturnType<typeof setInterval> | null;
   isInitialized: boolean;
+  serverResponse: ServerResolveResponse | null;
 }
 
 // =============================================================================
@@ -115,6 +125,7 @@ export class TrafficalClient {
   > & {
     localConfig?: ConfigBundle;
     trackDecisions: boolean;
+    evaluationMode: "bundle" | "server";
   };
 
   private _state: ClientState = {
@@ -124,10 +135,12 @@ export class TrafficalClient {
     lastOfflineWarning: 0,
     refreshTimer: null,
     isInitialized: false,
+    serverResponse: null,
   };
 
   private readonly _eventBatcher: EventBatcher;
   private readonly _decisionDedup: DecisionDeduplicator;
+  private readonly _decisionClient: DecisionClient;
   /** Cache of recent decisions for attribution lookup on rewards */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
 
@@ -141,8 +154,18 @@ export class TrafficalClient {
       localConfig: options.localConfig,
       refreshIntervalMs: options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
       strictMode: options.strictMode ?? false,
-      trackDecisions: options.trackDecisions !== false, // Default: true
+      trackDecisions: options.trackDecisions !== false,
+      evaluationMode: options.evaluationMode ?? "bundle",
     };
+
+    // Initialize DecisionClient
+    this._decisionClient = new DecisionClient({
+      baseUrl: this._options.baseUrl,
+      orgId: this._options.orgId,
+      projectId: this._options.projectId,
+      env: this._options.env,
+      apiKey: this._options.apiKey,
+    });
 
     // Initialize event batcher
     this._eventBatcher = new EventBatcher({
@@ -172,7 +195,11 @@ export class TrafficalClient {
    * This is called automatically by createTrafficalClient.
    */
   async initialize(): Promise<void> {
-    await this._fetchConfig();
+    if (this._options.evaluationMode === "server") {
+      await this._fetchServerResolve({});
+    } else {
+      await this._fetchConfig();
+    }
     this._startBackgroundRefresh();
     this._state.isInitialized = true;
   }
@@ -207,14 +234,18 @@ export class TrafficalClient {
    * Manually refreshes the config bundle.
    */
   async refreshConfig(): Promise<void> {
-    await this._fetchConfig();
+    if (this._options.evaluationMode === "server") {
+      await this._fetchServerResolve({});
+    } else {
+      await this._fetchConfig();
+    }
   }
 
   /**
    * Gets the current config bundle version.
    */
   getConfigVersion(): string | null {
-    return this._state.bundle?.version ?? null;
+    return this._state.serverResponse?.stateVersion ?? this._state.bundle?.version ?? null;
   }
 
   /**
@@ -234,6 +265,17 @@ export class TrafficalClient {
    * 4. Caller defaults
    */
   getParams<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): T {
+    // Server mode: return from cached server response
+    if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+      const result = { ...options.defaults } as Record<string, ParameterValue>;
+      for (const [key, value] of Object.entries(this._state.serverResponse.assignments)) {
+        if (key in result) {
+          result[key] = value;
+        }
+      }
+      return result as T;
+    }
+
     const bundle = this._getEffectiveBundle();
     return resolveParameters<T>(bundle, options.context, options.defaults);
   }
@@ -246,14 +288,34 @@ export class TrafficalClient {
    */
   decide<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): DecisionResult {
     const start = Date.now();
+
+    // Server mode: return from cached server response
+    if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+      const resp = this._state.serverResponse;
+      const assignments = { ...options.defaults } as Record<string, ParameterValue>;
+      for (const [key, value] of Object.entries(resp.assignments)) {
+        if (key in assignments) {
+          assignments[key] = value;
+        }
+      }
+      const decision: DecisionResult = {
+        decisionId: resp.decisionId,
+        assignments,
+        metadata: resp.metadata,
+      };
+      this._cacheDecision(decision);
+      if (this._options.trackDecisions) {
+        this._trackDecision(decision, Date.now() - start, Object.keys(options.defaults));
+      }
+      return decision;
+    }
+
     const bundle = this._getEffectiveBundle();
     const decision = coreDecide<T>(bundle, options.context, options.defaults);
     const latencyMs = Date.now() - start;
 
-    // Cache decision for attribution lookup when trackReward is called
     this._cacheDecision(decision);
 
-    // Auto-track decision if enabled
     if (this._options.trackDecisions) {
       this._trackDecision(decision, latencyMs, Object.keys(options.defaults));
     }
@@ -405,15 +467,19 @@ export class TrafficalClient {
    * Starts background refresh timer.
    */
   private _startBackgroundRefresh(): void {
-    if (this._options.refreshIntervalMs <= 0) {
-      return;
-    }
+    const interval = this._options.evaluationMode === "server"
+      ? (this._state.serverResponse?.suggestedRefreshMs ?? this._options.refreshIntervalMs)
+      : this._options.refreshIntervalMs;
+
+    if (interval <= 0) return;
 
     this._state.refreshTimer = setInterval(() => {
-      this._fetchConfig().catch(() => {
-        // Errors are logged in _fetchConfig
-      });
-    }, this._options.refreshIntervalMs);
+      if (this._options.evaluationMode === "server") {
+        this._fetchServerResolve({}).catch(() => {});
+      } else {
+        this._fetchConfig().catch(() => {});
+      }
+    }, interval);
 
     // Unref so timer doesn't keep process alive
     if (typeof this._state.refreshTimer.unref === "function") {
@@ -424,6 +490,18 @@ export class TrafficalClient {
   /**
    * Logs an offline warning (rate-limited).
    */
+  private async _fetchServerResolve(context: Context): Promise<void> {
+    try {
+      const response = await this._decisionClient.resolve({ context });
+      if (response) {
+        this._state.serverResponse = response;
+        this._state.lastFetchTime = Date.now();
+      }
+    } catch (error) {
+      this._logOfflineWarning(error);
+    }
+  }
+
   private _logOfflineWarning(error: unknown): void {
     const now = Date.now();
     if (now - this._state.lastOfflineWarning > OFFLINE_WARNING_INTERVAL_MS) {

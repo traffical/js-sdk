@@ -1,16 +1,14 @@
 /**
  * Edge Client Module
  *
- * Exports for making per-entity decisions via the edge worker API.
+ * Type-only exports for per-entity decisions via the edge worker API.
+ * The EdgeClient class and createEdgeDecideRequest helper have moved to @traffical/core-io.
  */
 
-export {
-  EdgeClient,
-  createEdgeDecideRequest,
-  type EdgeClientConfig,
-  type EdgeDecideRequest,
-  type EdgeDecideResponse,
-  type EdgeBatchDecideRequest,
-  type EdgeBatchDecideResponse,
+export type {
+  EdgeClientConfig,
+  EdgeDecideRequest,
+  EdgeDecideResponse,
+  EdgeBatchDecideRequest,
+  EdgeBatchDecideResponse,
 } from "./client.js";
-

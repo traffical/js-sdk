@@ -12,6 +12,7 @@
   },
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/core-io" },
     { "path": "packages/js-client" },
     { "path": "packages/node" },
     { "path": "packages/react" },

@@ -18,10 +18,13 @@ build_pkg() {
 # 1. Core (base - no deps)
 build_pkg "core"
 
-# 2. js-client (depends on core)
+# 2. core-io (depends on core)
+build_pkg "core-io"
+
+# 3. js-client (depends on core, core-io)
 build_pkg "js-client"
 
-# 3. Parallel: node, react, svelte (depend on core/js-client)
+# 4. Parallel: node, react, svelte (depend on core/core-io/js-client)
 build_pkg "node" &
 build_pkg "react" &
 build_pkg "svelte" &

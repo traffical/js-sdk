@@ -260,6 +260,23 @@ export function getUnitKeyValue(
   return String(value);
 }
 
+// =============================================================================
+// Resolve Options (for server-evaluated mode)
+// =============================================================================
+
+/**
+ * Options for resolution that allow injecting pre-fetched edge results.
+ * Used by server-evaluated mode where the edge worker resolves all policies
+ * (including per-entity) in a single request and passes results to the core engine.
+ */
+export interface ResolveOptions {
+  /**
+   * Pre-fetched edge results keyed by policyId.
+   * When provided, edge-mode policies use these instead of being skipped.
+   */
+  edgeResults?: Map<string, { allocationIndex: number; entityId: string }>;
+}
+
 /**
  * Internal resolution result with metadata.
  */
@@ -283,7 +300,8 @@ interface ResolutionResult<T> {
 function resolveInternal<T extends Record<string, ParameterValue>>(
   bundle: ConfigBundle | null,
   context: Context,
-  defaults: T
+  defaults: T,
+  options?: ResolveOptions
 ): ResolutionResult<T> {
   // Start with caller defaults (always safe)
   const assignments = { ...defaults } as Record<string, ParameterValue>;
@@ -392,9 +410,32 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
           break; // Only one policy per layer
         }
       } else if (policy.entityConfig && policy.entityConfig.resolutionMode === "edge") {
-        // Edge mode: skip for now, will be handled by SDK's async resolution
-        // In synchronous resolution, we fall through to bucket-based resolution
-        // The SDK should use async decide() for edge mode policies
+        const edgeResult = options?.edgeResults?.get(policy.id);
+        if (edgeResult) {
+          matchedPolicy = policy;
+          matchedPolicies.push(policy);
+
+          if (policy.entityConfig.dynamicAllocations) {
+            // Dynamic allocations: synthesize allocation from index
+            matchedAllocation = {
+              id: `${policy.id}_dynamic_${edgeResult.allocationIndex}`,
+              name: String(edgeResult.allocationIndex),
+              bucketRange: [0, 0] as [number, number],
+              overrides: {},
+            };
+          } else if (policy.allocations[edgeResult.allocationIndex]) {
+            matchedAllocation = policy.allocations[edgeResult.allocationIndex];
+            if (hasParams && matchedAllocation) {
+              for (const [key, value] of Object.entries(matchedAllocation.overrides)) {
+                if (key in assignments) {
+                  assignments[key] = value;
+                }
+              }
+            }
+          }
+          break;
+        }
+        // No pre-fetched result: skip this policy gracefully
         continue;
       } else {
         // Standard bucket-based resolution
@@ -452,9 +493,10 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
 export function resolveParameters<T extends Record<string, ParameterValue>>(
   bundle: ConfigBundle | null,
   context: Context,
-  defaults: T
+  defaults: T,
+  options?: ResolveOptions
 ): T {
-  return resolveInternal(bundle, context, defaults).assignments;
+  return resolveInternal(bundle, context, defaults, options).assignments;
 }
 
 /**
@@ -474,12 +516,14 @@ export function resolveParameters<T extends Record<string, ParameterValue>>(
 export function decide<T extends Record<string, ParameterValue>>(
   bundle: ConfigBundle | null,
   context: Context,
-  defaults: T
+  defaults: T,
+  options?: ResolveOptions
 ): DecisionResult {
   const { assignments, unitKeyValue, layers, matchedPolicies } = resolveInternal(
     bundle,
     context,
-    defaults
+    defaults,
+    options
   );
 
   // Filter context based on matched policies' contextLogging config

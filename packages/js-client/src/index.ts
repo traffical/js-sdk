@@ -33,6 +33,9 @@
 // Re-export everything from core
 export * from "@traffical/core";
 
+// Re-export from core-io for consumer access
+export * from "@traffical/core-io";
+
 // Export client
 export {
   TrafficalClient,

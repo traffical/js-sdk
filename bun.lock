@@ -5,12 +5,12 @@
     "": {
       "name": "@traffical/js-sdk",
       "devDependencies": {
-        "@changesets/cli": "^2.27.0",
+        "@changesets/cli": "^2.29.8",
       },
     },
     "packages/core": {
       "name": "@traffical/core",
-      "version": "0.2.1",
+      "version": "0.2.3",
       "dependencies": {
         "nanoid": "^5.0.9",
         "ulid": "^2.3.0",
@@ -21,11 +21,23 @@
         "typescript": "^5.3.0",
       },
     },
+    "packages/core-io": {
+      "name": "@traffical/core-io",
+      "version": "0.1.0",
+      "dependencies": {
+        "@traffical/core": "0.2.3",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+    },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.2.1",
+      "version": "0.2.6",
       "dependencies": {
-        "@traffical/core": "workspace:^",
+        "@traffical/core": "0.2.3",
+        "@traffical/core-io": "0.1.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -35,9 +47,10 @@
     },
     "packages/node": {
       "name": "@traffical/node",
-      "version": "0.2.1",
+      "version": "0.2.3",
       "dependencies": {
-        "@traffical/core": "workspace:^",
+        "@traffical/core": "0.2.3",
+        "@traffical/core-io": "0.1.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -46,7 +59,7 @@
     },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.2.1",
+      "version": "0.2.9",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -62,7 +75,7 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.2.1",
+      "version": "0.2.7",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -191,6 +204,8 @@
 
     "@traffical/core": ["@traffical/core@workspace:packages/core"],
 
+    "@traffical/core-io": ["@traffical/core-io@workspace:packages/core-io"],
+
     "@traffical/js-client": ["@traffical/js-client@workspace:packages/js-client"],
 
     "@traffical/node": ["@traffical/node@workspace:packages/node"],
@@ -201,7 +216,7 @@
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 
-    "@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
+    "@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 
@@ -229,7 +244,7 @@
 
     "braces": ["braces@3.0.3", "", { "dependencies": { "fill-range": "^7.1.1" } }, "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="],
 
-    "bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
+    "bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
 
     "chardet": ["chardet@2.1.1", "", {}, "sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ=="],
 
@@ -421,9 +436,17 @@
 
     "@manypkg/get-packages/fs-extra": ["fs-extra@8.1.0", "", { "dependencies": { "graceful-fs": "^4.2.0", "jsonfile": "^4.0.0", "universalify": "^0.1.0" } }, "sha512-yhlQgA6mnOJUKOsRUFsgJdQCvkKhcz8tlZG5HBQfReYZy46OwLcY+Zia0mtdHsOo9y/hP+CxMN0TU9QxoOtG4g=="],
 
+    "@traffical/react/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
+
+    "@traffical/svelte/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
+
     "read-yaml-file/js-yaml": ["js-yaml@3.14.2", "", { "dependencies": { "argparse": "^1.0.7", "esprima": "^4.0.0" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-PMSmkqxr106Xa156c2M265Z+FTrPl+oxd/rgOQy2tijQeK5TxQ43psO1ZCwhVOSdnn+RzkzlRz/eY4BgJBYVpg=="],
 
     "svelte-check/chokidar": ["chokidar@4.0.3", "", { "dependencies": { "readdirp": "^4.0.1" } }, "sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA=="],
+
+    "@traffical/react/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
+
+    "@traffical/svelte/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
 
     "read-yaml-file/js-yaml/argparse": ["argparse@1.0.10", "", { "dependencies": { "sprintf-js": "~1.0.2" } }, "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg=="],
 

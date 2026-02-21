@@ -8,6 +8,7 @@ export {
   resolveParameters,
   decide,
   getUnitKeyValue,
+  type ResolveOptions,
 } from "./engine.js";
 
 export {

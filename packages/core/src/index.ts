@@ -69,6 +69,7 @@ export {
   resolveParameters,
   decide,
   getUnitKeyValue,
+  type ResolveOptions,
   evaluateCondition,
   evaluateConditions,
   // Condition builders
@@ -123,14 +124,19 @@ export {
   type EntityIdPrefix,
 } from "./ids/index.js";
 
-// Edge Client (for per-entity policies)
-export {
-  EdgeClient,
-  createEdgeDecideRequest,
-  type EdgeClientConfig,
-  type EdgeDecideRequest,
-  type EdgeDecideResponse,
-  type EdgeBatchDecideRequest,
-  type EdgeBatchDecideResponse,
+// Edge types (for per-entity policies)
+// EdgeClient class and createEdgeDecideRequest moved to @traffical/core-io
+export type {
+  EdgeClientConfig,
+  EdgeDecideRequest,
+  EdgeDecideResponse,
+  EdgeBatchDecideRequest,
+  EdgeBatchDecideResponse,
 } from "./edge/index.js";
+
+// Decision types (for server-evaluated mode)
+export type {
+  ServerResolveRequest,
+  ServerResolveResponse,
+} from "./decision/index.js";
 

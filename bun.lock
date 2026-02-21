@@ -10,20 +10,20 @@
     },
     "packages/core": {
       "name": "@traffical/core",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "dependencies": {
         "nanoid": "^5.0.9",
         "ulid": "^2.3.0",
       },
       "devDependencies": {
-        "@traffical/sdk-spec": "^0.1.0",
+        "@traffical/sdk-spec": "^0.2.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
     },
     "packages/core-io": {
       "name": "@traffical/core-io",
-      "version": "0.1.0",
+      "version": "0.2.4",
       "dependencies": {
         "@traffical/core": "0.2.3",
       },
@@ -34,7 +34,7 @@
     },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "dependencies": {
         "@traffical/core": "0.2.3",
         "@traffical/core-io": "0.1.0",
@@ -47,7 +47,7 @@
     },
     "packages/node": {
       "name": "@traffical/node",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "dependencies": {
         "@traffical/core": "0.2.3",
         "@traffical/core-io": "0.1.0",
@@ -59,7 +59,7 @@
     },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.2.9",
+      "version": "0.2.10",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -75,7 +75,7 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -212,7 +212,7 @@
 
     "@traffical/react": ["@traffical/react@workspace:packages/react"],
 
-    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.1.0", "", {}, "sha512-7hEW7a4DU/gsSZHJffTp6lMldAtNKkRe22i1mH+W8rLCk5UP7BFPXRJFfntfvLKBUp0HRWA43LqAdC8TE7MYfA=="],
+    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.2.0", "", {}, "sha512-HuyMOkxlVBRiFA9wEnfwE23jwdCS8yucxhQ3+YpsNGu5qJGeFP0WPDsuu+ighQJY9VK9ERbDUyFvFfQWypT8hw=="],
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 

@@ -11,6 +11,7 @@
 
 import type { TrackableEvent } from "@traffical/core";
 import type { StorageProvider } from "./storage.js";
+import type { LifecycleProvider, VisibilityState } from "./lifecycle.js";
 
 const FAILED_EVENTS_KEY = "failed_events";
 const DEFAULT_BATCH_SIZE = 10;
@@ -24,6 +25,8 @@ export interface EventLoggerOptions {
   apiKey: string;
   /** Storage provider for failed events */
   storage: StorageProvider;
+  /** Lifecycle provider for visibility/unload events */
+  lifecycleProvider?: LifecycleProvider;
   /** Max events before auto-flush (default: 10) */
   batchSize?: number;
   /** Auto-flush interval in ms (default: 30000) */
@@ -40,9 +43,11 @@ export class EventLogger {
   private _flushIntervalMs: number;
   private _onError?: (error: Error) => void;
 
+  private _lifecycleProvider?: LifecycleProvider;
   private _queue: TrackableEvent[] = [];
   private _flushTimer: ReturnType<typeof setTimeout> | null = null;
   private _isFlushing = false;
+  private _visibilityCallback?: (state: VisibilityState) => void;
 
   constructor(options: EventLoggerOptions) {
     this._endpoint = options.endpoint;
@@ -51,8 +56,8 @@ export class EventLogger {
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
     this._onError = options.onError;
+    this._lifecycleProvider = options.lifecycleProvider;
 
-    // Set up browser event listeners
     this._setupListeners();
 
     // Retry failed events from previous session
@@ -207,38 +212,27 @@ export class EventLogger {
   }
 
   private _setupListeners(): void {
-    if (typeof window === "undefined") return;
+    if (!this._lifecycleProvider) return;
 
-    // Flush on page hide (covers tab close, navigation, etc.)
-    window.addEventListener("pagehide", this._onPageHide);
-
-    // Flush when page becomes hidden (tab switch, minimize)
-    document.addEventListener("visibilitychange", this._onVisibilityChange);
-
-    // Fallback: beforeunload for older browsers
-    window.addEventListener("beforeunload", this._onBeforeUnload);
+    this._visibilityCallback = (state) => {
+      if (state === "background") {
+        if (this._lifecycleProvider?.isUnloading()) {
+          this.flushBeacon();
+        } else {
+          this.flush().catch(() => {});
+        }
+      } else {
+        this._retryFailedEvents();
+      }
+    };
+    this._lifecycleProvider.onVisibilityChange(this._visibilityCallback);
   }
 
   private _removeListeners(): void {
-    if (typeof window === "undefined") return;
-
-    window.removeEventListener("pagehide", this._onPageHide);
-    document.removeEventListener("visibilitychange", this._onVisibilityChange);
-    window.removeEventListener("beforeunload", this._onBeforeUnload);
-  }
-
-  private _onPageHide = (): void => {
-    this.flushBeacon();
-  };
-
-  private _onVisibilityChange = (): void => {
-    if (document.visibilityState === "hidden") {
-      this.flushBeacon();
+    if (this._lifecycleProvider && this._visibilityCallback) {
+      this._lifecycleProvider.removeVisibilityListener(this._visibilityCallback);
+      this._visibilityCallback = undefined;
     }
-  };
-
-  private _onBeforeUnload = (): void => {
-    this.flushBeacon();
-  };
+  }
 }
 

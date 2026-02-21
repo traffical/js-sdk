@@ -42,6 +42,7 @@ import { ExposureDeduplicator } from "./exposure-dedup.js";
 import { StableIdProvider } from "./stable-id.js";
 import { createStorageProvider, type StorageProvider } from "./storage.js";
 import { PluginManager, type TrafficalPlugin, createDecisionTrackingPlugin } from "./plugins/index.js";
+import { createBrowserLifecycleProvider, type LifecycleProvider } from "./lifecycle.js";
 
 // =============================================================================
 // Constants
@@ -112,6 +113,8 @@ export interface TrafficalClientOptions {
    * - "server": SDK delegates resolution to the edge worker via POST /v1/resolve.
    */
   evaluationMode?: "bundle" | "server";
+  /** Lifecycle provider for visibility/unload events (default: browser lifecycle) */
+  lifecycleProvider?: LifecycleProvider;
 }
 
 interface ClientState {
@@ -157,6 +160,7 @@ export class TrafficalClient {
   private readonly _exposureDedup: ExposureDeduplicator;
   private readonly _stableId: StableIdProvider;
   private readonly _plugins: PluginManager;
+  private readonly _lifecycleProvider: LifecycleProvider;
   private readonly _decisionClient: DecisionClient | null;
   /** Cache of recent decisions for attribution lookup when track() is called */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
@@ -196,11 +200,13 @@ export class TrafficalClient {
     // Initialize components
     this._errorBoundary = new ErrorBoundary(options.errorBoundary);
     this._storage = options.storage ?? createStorageProvider();
+    this._lifecycleProvider = options.lifecycleProvider ?? createBrowserLifecycleProvider();
 
     this._eventLogger = new EventLogger({
       endpoint: `${this._options.baseUrl}/v1/events/batch`,
       apiKey: options.apiKey,
       storage: this._storage,
+      lifecycleProvider: this._lifecycleProvider,
       batchSize: options.eventBatchSize,
       flushIntervalMs: options.eventFlushIntervalMs,
       onError: (error) => {
@@ -292,8 +298,11 @@ export class TrafficalClient {
       this._state.refreshTimer = null;
     }
 
-    // Flush any remaining events
-    this._eventLogger.flushBeacon();
+    if (this._lifecycleProvider.isUnloading()) {
+      this._eventLogger.flushBeacon();
+    } else {
+      this._eventLogger.flush().catch(() => {});
+    }
     this._eventLogger.destroy();
 
     // Run plugin onDestroy hooks

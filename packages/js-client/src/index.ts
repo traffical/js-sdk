@@ -56,6 +56,14 @@ export {
   type StorageProvider,
 } from "./storage.js";
 
+// Export lifecycle abstraction
+export {
+  type LifecycleProvider,
+  type VisibilityState,
+  type VisibilityCallback,
+  createBrowserLifecycleProvider,
+} from "./lifecycle.js";
+
 // Export plugin system
 export { PluginManager, type TrafficalPlugin, type PluginOptions } from "./plugins/index.js";
 

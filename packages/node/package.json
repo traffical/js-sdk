@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@traffical/core": "0.2.4",
-    "@traffical/core-io": "0.2.3"
+    "@traffical/core-io": "0.2.4"
   },
   "devDependencies": {
     "@types/bun": "latest",

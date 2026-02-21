@@ -16,7 +16,8 @@
     { "path": "packages/js-client" },
     { "path": "packages/node" },
     { "path": "packages/react" },
-    { "path": "packages/svelte" }
+    { "path": "packages/svelte" },
+    { "path": "packages/react-native" }
   ],
   "files": []
 }

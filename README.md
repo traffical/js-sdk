@@ -11,6 +11,7 @@ Traffical is a production-grade platform for experimentation, feature management
 | [@traffical/core](packages/core) | Pure TypeScript core - parameter resolution without I/O | [![npm](https://img.shields.io/npm/v/@traffical/core)](https://www.npmjs.com/package/@traffical/core) |
 | [@traffical/js-client](packages/js-client) | Browser client with caching and event tracking | [![npm](https://img.shields.io/npm/v/@traffical/js-client)](https://www.npmjs.com/package/@traffical/js-client) |
 | [@traffical/react](packages/react) | React provider and hooks | [![npm](https://img.shields.io/npm/v/@traffical/react)](https://www.npmjs.com/package/@traffical/react) |
+| [@traffical/react-native](packages/react-native) | React Native with AsyncStorage & AppState | [![npm](https://img.shields.io/npm/v/@traffical/react-native)](https://www.npmjs.com/package/@traffical/react-native) |
 | [@traffical/svelte](packages/svelte) | Svelte 5 bindings with SSR support | [![npm](https://img.shields.io/npm/v/@traffical/svelte)](https://www.npmjs.com/package/@traffical/svelte) |
 | [@traffical/node](packages/node) | Node.js server SDK | [![npm](https://img.shields.io/npm/v/@traffical/node)](https://www.npmjs.com/package/@traffical/node) |
 
@@ -47,6 +48,49 @@ function MyComponent() {
     <button style={{ color: params['button.color'] }}>
       {params['button.text']}
     </button>
+  );
+}
+```
+
+### React Native
+
+```bash
+npm install @traffical/react-native @react-native-async-storage/async-storage
+```
+
+```tsx
+import { TrafficalRNProvider, useTraffical } from '@traffical/react-native';
+import { ActivityIndicator } from 'react-native';
+
+function App() {
+  return (
+    <TrafficalRNProvider
+      config={{
+        orgId: 'org_123',
+        projectId: 'proj_456',
+        env: 'production',
+        apiKey: 'pk_...',
+      }}
+      loadingComponent={<ActivityIndicator />}
+    >
+      <MyScreen />
+    </TrafficalRNProvider>
+  );
+}
+
+function MyScreen() {
+  const { params, track } = useTraffical({
+    defaults: {
+      'onboarding.ctaText': 'Get Started',
+      'onboarding.showSkip': true,
+    },
+  });
+
+  return (
+    <Button
+      title={params['onboarding.ctaText']}
+      onPress={() => track('cta_tap')}
+    />
   );
 }
 ```
@@ -104,6 +148,7 @@ All packages follow [Semantic Versioning](https://semver.org/).
 | @traffical/core | 0.1.2 |
 | @traffical/js-client | 0.1.2 |
 | @traffical/react | 0.1.1 |
+| @traffical/react-native | 0.1.0 |
 | @traffical/svelte | 0.1.0 |
 | @traffical/node | 0.1.2 |
 

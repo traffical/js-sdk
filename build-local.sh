@@ -28,6 +28,7 @@ build_pkg "js-client"
 build_pkg "node" &
 build_pkg "react" &
 build_pkg "svelte" &
+build_pkg "react-native" &
 wait
 
 

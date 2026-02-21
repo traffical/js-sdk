@@ -1,6 +1,6 @@
 {
   "name": "@traffical/js-client",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "description": "Traffical JavaScript SDK for browser environments",
   "type": "module",
   "main": "./dist/index.js",
@@ -24,8 +24,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@traffical/core": "0.2.4",
-    "@traffical/core-io": "0.2.4"
+    "@traffical/core": "0.3.0",
+    "@traffical/core-io": "0.3.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

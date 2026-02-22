@@ -1,5 +1,11 @@
 # @traffical/react-native
 
+## 0.3.0
+
+### Minor Changes
+
+- 7175509: Add server-mode re-resolve on identity change via resolveVersion
+
 ## 0.2.0
 
 ### Minor Changes

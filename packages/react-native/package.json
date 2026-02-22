@@ -1,6 +1,6 @@
 {
   "name": "@traffical/react-native",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Traffical SDK for React Native - server-evaluated feature flags, A/B testing, and adaptive optimization",
   "type": "module",
   "main": "./dist/index.js",

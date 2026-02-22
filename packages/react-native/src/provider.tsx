@@ -29,8 +29,10 @@ export function TrafficalRNProvider({
   const [client, setClient] = useState<TrafficalRNClient | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [resolveVersion, setResolveVersion] = useState(0);
 
   const clientRef = useRef<TrafficalRNClient | null>(null);
+  const prevUnitKeyRef = useRef<string | null>(null);
 
   const getUnitKey = useCallback(() => {
     if (config.unitKeyFn) {
@@ -125,6 +127,26 @@ export function TrafficalRNProvider({
     config.cacheMaxAgeMs,
   ]);
 
+  // In server mode, re-resolve when the identity changes so the cached
+  // server response is refreshed for the new user.
+  useEffect(() => {
+    const currentClient = clientRef.current;
+    if (!currentClient || !ready) return;
+
+    const currentKey = getUnitKey();
+    if (prevUnitKeyRef.current === null) {
+      prevUnitKeyRef.current = currentKey;
+      return;
+    }
+    if (prevUnitKeyRef.current === currentKey) return;
+    prevUnitKeyRef.current = currentKey;
+
+    currentClient.setStableId(currentKey);
+    currentClient.refreshConfig().then(() => {
+      setResolveVersion((v) => v + 1);
+    }).catch(() => {});
+  }, [ready, getUnitKey]);
+
   const contextValue = useMemo<TrafficalContextValue>(
     () => ({
       client,
@@ -132,6 +154,7 @@ export function TrafficalRNProvider({
       error,
       getUnitKey,
       getContext,
+      resolveVersion,
       initialParams: config.initialParams,
       localConfig: config.localConfig,
     }),
@@ -141,6 +164,7 @@ export function TrafficalRNProvider({
       error,
       getUnitKey,
       getContext,
+      resolveVersion,
       config.initialParams,
       config.localConfig,
     ]

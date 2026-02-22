@@ -40,6 +40,8 @@ export interface TrafficalContextValue {
   error: Error | null;
   getUnitKey: () => string;
   getContext: () => Context;
+  /** Incremented after a server-mode re-resolve (e.g. identity change). */
+  resolveVersion: number;
   initialParams?: Record<string, unknown>;
   localConfig?: ConfigBundle;
 }

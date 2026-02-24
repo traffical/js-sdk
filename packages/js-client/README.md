@@ -171,6 +171,100 @@ The plugin:
 - Uses MutationObserver for SPA support
 - Supports multiple property types: `innerHTML`, `textContent`, `src`, `href`, `style.*`
 
+### Redirect Plugin
+
+Run URL split tests (redirect experiments) where visitors are redirected to different landing page variants. The redirect plugin automatically triggers a decision on init, performs the redirect, and sets an attribution cookie. The attribution plugin ensures conversions on the variant page are attributed back to the experiment.
+
+```typescript
+import {
+  createTrafficalClient,
+  createRedirectPlugin,
+  createRedirectAttributionPlugin,
+} from '@traffical/js-client';
+
+const traffical = await createTrafficalClient({
+  orgId: 'org_xxx',
+  projectId: 'proj_xxx',
+  env: 'production',
+  apiKey: 'pk_xxx',
+  plugins: [
+    createRedirectPlugin(),
+    createRedirectAttributionPlugin(),
+  ],
+});
+
+// That's it — the redirect plugin calls decide() automatically on init.
+// On entry pages, it redirects. On other pages, it's a no-op.
+
+// Track goals as usual — the attribution plugin injects
+// redirect experiment metadata into every track() call.
+traffical.track('add_to_cart', { value: 29.99 });
+```
+
+#### GTM Integration
+
+On **all pages**, add the Traffical SDK with both redirect plugins:
+
+```html
+<script src="https://cdn.traffical.io/js-client/v1/traffical.min.js"></script>
+<script>
+  Traffical.init({
+    orgId: '{{Traffical Org ID}}',
+    projectId: '{{Traffical Project ID}}',
+    env: '{{Traffical Environment}}',
+    apiKey: '{{Traffical API Key}}',
+    plugins: [
+      Traffical.createRedirectPlugin(),
+      Traffical.createRedirectAttributionPlugin(),
+    ],
+  });
+</script>
+```
+
+Track goal events from a separate GTM tag (e.g., triggered on "Add to Cart" click):
+
+```html
+<script>
+  var client = Traffical.instance();
+  if (client) {
+    client.track('add_to_cart', { value: 29.99 });
+  }
+</script>
+```
+
+#### How It Works
+
+1. **Init** — The redirect plugin's `onInitialize` hook receives the client and calls `decide()` automatically.
+
+2. **Entry page** — `onBeforeDecision` injects `url.pathname` into the context. The policy condition (e.g., `url.pathname startsWith /products/pillow`) matches, `redirect.url` resolves to the variant URL. `onDecision` writes an attribution cookie (`traffical_rdr`) and calls `window.location.replace()`.
+
+3. **Variant page** — The SDK loads again, `decide()` runs, but the policy condition doesn't match the new URL, so `redirect.url` stays empty and no redirect happens. The redirect-attribution plugin reads the `traffical_rdr` cookie and injects the experiment metadata into every `track()` call.
+
+#### Configuration
+
+```typescript
+createRedirectPlugin({
+  parameterKey?: string,   // Default: "redirect.url"
+  compareMode?: string,    // "pathname" (default) or "href"
+  cookieName?: string,     // Default: "traffical_rdr"
+});
+
+createRedirectAttributionPlugin({
+  cookieName?: string,     // Default: "traffical_rdr"
+  expiryMs?: number,       // Default: 86400000 (24 hours)
+});
+```
+
+#### Context Fields
+
+The redirect plugin automatically adds these context fields:
+
+| Field | Value | Example |
+|-------|-------|---------|
+| `url.pathname` | `window.location.pathname` | `/products/pillow` |
+
+Use `url.pathname` in policy conditions to target specific pages.
+
 ## Development
 
 ### Build

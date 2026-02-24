@@ -25,6 +25,14 @@ import {
   type DOMBindingPlugin,
   type DOMBindingPluginOptions,
 } from "./plugins/dom-binding.js";
+import {
+  createRedirectPlugin,
+  type RedirectPluginOptions,
+} from "./plugins/redirect.js";
+import {
+  createRedirectAttributionPlugin,
+  type RedirectAttributionPluginOptions,
+} from "./plugins/redirect-attribution.js";
 
 // Global state for singleton pattern
 let _instance: TrafficalClient | null = null;
@@ -94,5 +102,10 @@ export {
   createDOMBindingPlugin,
   type DOMBindingPlugin,
   type DOMBindingPluginOptions,
+  // Redirect plugins
+  createRedirectPlugin,
+  type RedirectPluginOptions,
+  createRedirectAttributionPlugin,
+  type RedirectAttributionPluginOptions,
 };
 

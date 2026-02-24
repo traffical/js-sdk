@@ -1,5 +1,12 @@
 import { describe, test, expect, beforeEach, spyOn } from "bun:test";
-import { PluginManager, type TrafficalPlugin } from "./index";
+import { PluginManager, type TrafficalPlugin, type PluginClientAPI } from "./index";
+
+const mockClient: PluginClientAPI = {
+  decide: () => ({ decisionId: "", assignments: {}, metadata: { timestamp: "", unitKeyValue: "", layers: [] } }),
+  getParams: () => ({}) as any,
+  track: () => {},
+  trackExposure: () => {},
+};
 
 describe("PluginManager", () => {
   let manager: PluginManager;
@@ -156,9 +163,22 @@ describe("PluginManager", () => {
       },
     });
 
-    await manager.runInitialize();
+    await manager.runInitialize(mockClient);
     
     expect(initialized).toBe(true);
+  });
+
+  test("runInitialize passes client reference to plugins", async () => {
+    let receivedClient: PluginClientAPI | null = null;
+
+    manager.register({
+      name: "client-aware",
+      onInitialize: (client) => { receivedClient = client; },
+    });
+
+    await manager.runInitialize(mockClient);
+
+    expect(receivedClient).toBe(mockClient);
   });
 
   test("runDestroy calls cleanup hooks", () => {

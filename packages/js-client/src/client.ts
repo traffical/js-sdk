@@ -275,8 +275,8 @@ export class TrafficalClient {
         this._startBackgroundRefresh();
         this._state.isInitialized = true;
 
-        // Run plugin onInitialize hooks
-        await this._plugins.runInitialize();
+        // Run plugin onInitialize hooks (pass client reference for autonomous plugins)
+        await this._plugins.runInitialize(this);
       },
       undefined
     );

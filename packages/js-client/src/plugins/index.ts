@@ -12,7 +12,7 @@ import type {
   Context,
   ParameterValue,
 } from "@traffical/core";
-import type { TrafficalPlugin, PluginOptions } from "./types.js";
+import type { TrafficalPlugin, PluginOptions, PluginClientAPI } from "./types.js";
 
 interface RegisteredPlugin {
   plugin: TrafficalPlugin;
@@ -67,13 +67,13 @@ export class PluginManager {
   }
 
   /**
-   * Run onInitialize hooks.
+   * Run onInitialize hooks, passing the client API reference.
    */
-  async runInitialize(): Promise<void> {
+  async runInitialize(client: PluginClientAPI): Promise<void> {
     for (const { plugin } of this._plugins) {
       if (plugin.onInitialize) {
         try {
-          await plugin.onInitialize();
+          await plugin.onInitialize(client);
         } catch (error) {
           console.warn(`[Traffical] Plugin "${plugin.name}" onInitialize error:`, error);
         }
@@ -217,7 +217,7 @@ export class PluginManager {
 }
 
 // Re-export types
-export type { TrafficalPlugin, PluginOptions } from "./types.js";
+export type { TrafficalPlugin, PluginOptions, PluginClientAPI } from "./types.js";
 
 // Re-export plugins
 export {
@@ -225,4 +225,14 @@ export {
   type DecisionTrackingPluginOptions,
   type DecisionTrackingPluginDeps,
 } from "./decision-tracking.js";
+
+export {
+  createRedirectPlugin,
+  type RedirectPluginOptions,
+} from "./redirect.js";
+
+export {
+  createRedirectAttributionPlugin,
+  type RedirectAttributionPluginOptions,
+} from "./redirect-attribution.js";
 

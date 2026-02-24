@@ -14,6 +14,25 @@ import type {
 } from "@traffical/core";
 
 /**
+ * Minimal client interface exposed to plugins.
+ * Avoids circular dependency with the full TrafficalClient class.
+ */
+export interface PluginClientAPI {
+  decide<T extends Record<string, ParameterValue>>(
+    options: { context: Context; defaults: T }
+  ): DecisionResult;
+  getParams<T extends Record<string, ParameterValue>>(
+    options: { context: Context; defaults: T }
+  ): T;
+  track(
+    eventName: string,
+    properties?: Record<string, unknown>,
+    options?: { decisionId?: string; unitKey?: string }
+  ): void;
+  trackExposure(decision: DecisionResult): void;
+}
+
+/**
  * Plugin interface - implement any subset of hooks.
  */
 export interface TrafficalPlugin {
@@ -22,8 +41,10 @@ export interface TrafficalPlugin {
 
   /**
    * Called after client initialization completes.
+   * Receives a reference to the client API for plugins that need
+   * to trigger decisions or track events autonomously.
    */
-  onInitialize?: () => void | Promise<void>;
+  onInitialize?: (client: PluginClientAPI) => void | Promise<void>;
 
   /**
    * Called when the config bundle is fetched or refreshed.

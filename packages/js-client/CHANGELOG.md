@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.5.0
+
+### Minor Changes
+
+- e0a2791: new feature: add redirect experiment plugins
+
 ## 0.4.0
 
 ### Minor Changes

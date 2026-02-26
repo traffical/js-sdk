@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 7c95577: Add SDK-side contextual bandit scoring — reads policy.contextualModel from the bundle, computes per-allocation scores via linear dot-product, applies softmax with gamma temperature and probability floor, and deterministically selects an allocation
+
 ## 0.3.0
 
 ### Minor Changes

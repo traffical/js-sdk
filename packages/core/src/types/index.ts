@@ -133,6 +133,63 @@ export interface BundleContextLogging {
   allowedFields: string[];
 }
 
+// =============================================================================
+// Contextual Model Types
+// =============================================================================
+
+/**
+ * Contextual bandit model in the bundle.
+ *
+ * Used for linear_contextual policies. The SDK uses these coefficients
+ * to compute per-allocation scores and select variants via softmax.
+ */
+export interface BundleContextualModel {
+  /** Softmax temperature (0-1). Lower = more deterministic. */
+  gamma: number;
+  /** Minimum probability for any allocation (ensures continued exploration). */
+  actionProbabilityFloor: number;
+  /** Default score for allocations without trained coefficients. */
+  defaultAllocationScore: number;
+  /** Coefficients per allocation, keyed by allocation name. */
+  coefficients: Record<string, BundleAllocationCoefficients>;
+}
+
+/**
+ * Coefficients for a single allocation in the contextual model.
+ */
+export interface BundleAllocationCoefficients {
+  /** Base score (bias term). */
+  intercept: number;
+  /** Numeric feature coefficients. */
+  numeric: BundleNumericCoefficient[];
+  /** Categorical feature coefficients. */
+  categorical: BundleCategoricalCoefficient[];
+}
+
+/**
+ * Numeric coefficient: score += coef * contextValue, or missing when absent.
+ */
+export interface BundleNumericCoefficient {
+  /** Context field key. */
+  key: string;
+  /** Coefficient value. */
+  coef: number;
+  /** Value to add when the field is missing from context. */
+  missing: number;
+}
+
+/**
+ * Categorical coefficient: score += values[contextValue], or missing when absent/unknown.
+ */
+export interface BundleCategoricalCoefficient {
+  /** Context field key. */
+  key: string;
+  /** Map of category values to their coefficients. */
+  values: Record<string, number>;
+  /** Value to add when the field is missing or has an unknown value. */
+  missing: number;
+}
+
 /**
  * Configuration for per-entity adaptive policies.
  *
@@ -214,6 +271,12 @@ export interface BundlePolicy {
    * Only fields in the allowlist are included to protect PII.
    */
   contextLogging?: BundleContextLogging;
+  /**
+   * For linear_contextual policies: trained model for SDK-side scoring.
+   * When present, the SDK computes personalized allocation probabilities
+   * instead of using bucket-based assignment.
+   */
+  contextualModel?: BundleContextualModel;
   /**
    * For per-entity adaptive policies: entity configuration.
    * When present, optimization happens at a granular level per entity.

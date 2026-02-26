@@ -1,5 +1,13 @@
 # @traffical/node
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [7c95577]
+  - @traffical/core@0.4.0
+  - @traffical/core-io@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes

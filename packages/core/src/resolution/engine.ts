@@ -29,7 +29,6 @@ import { weightedSelection } from "../hashing/weighted.js";
 import { evaluateConditions } from "./conditions.js";
 import { resolveContextualPolicy } from "../scoring/contextual.js";
 import { generateDecisionId } from "../ids/index.js";
-import { fnv1a } from "../hashing/fnv1a.js";
 
 /**
  * Filters context to only include fields allowed by matched policies.

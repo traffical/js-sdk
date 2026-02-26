@@ -31,6 +31,11 @@ export type {
   PolicyState,
   PolicyKind,
   ConditionOperator,
+  // Contextual model types
+  BundleContextualModel,
+  BundleAllocationCoefficients,
+  BundleNumericCoefficient,
+  BundleCategoricalCoefficient,
   // Per-entity types
   EntityConfig,
   EntityWeights,
@@ -62,6 +67,7 @@ export {
   findMatchingAllocation,
   percentageToBucketRange,
   createBucketRanges,
+  weightedSelection,
 } from "./hashing/index.js";
 
 // Resolution
@@ -88,6 +94,14 @@ export {
   exists,
   notExists,
 } from "./resolution/index.js";
+
+// Scoring (contextual bandits)
+export {
+  computeAllocationScore,
+  softmaxProbabilities,
+  applyProbabilityFloor,
+  resolveContextualPolicy,
+} from "./scoring/index.js";
 
 // Deduplication
 export {

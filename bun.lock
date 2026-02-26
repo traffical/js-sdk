@@ -16,7 +16,7 @@
         "ulid": "^2.3.0",
       },
       "devDependencies": {
-        "@traffical/sdk-spec": "^0.2.0",
+        "@traffical/sdk-spec": "^0.3.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -34,7 +34,7 @@
     },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@traffical/core": "0.3.0",
         "@traffical/core-io": "0.3.0",
@@ -59,7 +59,7 @@
     },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.2.11",
+      "version": "0.2.12",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -75,7 +75,7 @@
     },
     "packages/react-native": {
       "name": "@traffical/react-native",
-      "version": "0.1.0",
+      "version": "0.3.0",
       "dependencies": {
         "@traffical/core": "0.3.0",
         "@traffical/js-client": "0.3.0",
@@ -93,7 +93,7 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.2.9",
+      "version": "0.2.10",
       "dependencies": {
         "@traffical/core": "workspace:^",
         "@traffical/js-client": "workspace:^",
@@ -344,7 +344,7 @@
 
     "@traffical/react-native": ["@traffical/react-native@workspace:packages/react-native"],
 
-    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.2.0", "", {}, "sha512-HuyMOkxlVBRiFA9wEnfwE23jwdCS8yucxhQ3+YpsNGu5qJGeFP0WPDsuu+ighQJY9VK9ERbDUyFvFfQWypT8hw=="],
+    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.3.0", "", {}, "sha512-OvbxhHmtUyttkCL8ULmii7i2TfibVhmWzCqSJot7fTPUiMS+1BwDD2ZYkyLHvtM5RbNtz2PJ8zx1ZUAW/DLwKA=="],
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 

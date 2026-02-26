@@ -12,4 +12,5 @@ export {
   percentageToBucketRange,
   createBucketRanges,
 } from "./bucket.js";
+export { weightedSelection } from "./weighted.js";
 

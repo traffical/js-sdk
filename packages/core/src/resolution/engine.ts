@@ -25,7 +25,9 @@ import type {
   Id,
 } from "../types/index.js";
 import { computeBucket, findMatchingAllocation } from "../hashing/bucket.js";
+import { weightedSelection } from "../hashing/weighted.js";
 import { evaluateConditions } from "./conditions.js";
+import { resolveContextualPolicy } from "../scoring/contextual.js";
 import { generateDecisionId } from "../ids/index.js";
 import { fnv1a } from "../hashing/fnv1a.js";
 
@@ -89,38 +91,6 @@ function buildEntityId(entityKeys: string[], context: Context): string | null {
     parts.push(String(value));
   }
   return parts.join("_");
-}
-
-/**
- * Performs deterministic weighted selection using a hash.
- *
- * Uses the entity ID + unit key + policy ID to deterministically select
- * an allocation based on weights. This ensures the same entity always
- * gets the same allocation for a given weight distribution.
- *
- * @param weights - Array of weights (should sum to 1.0)
- * @param seed - Seed string for deterministic hashing
- * @returns Index of selected allocation
- */
-function weightedSelection(weights: number[], seed: string): number {
-  if (weights.length === 0) return 0;
-  if (weights.length === 1) return 0;
-
-  // Compute a deterministic random value in [0, 1) using hash
-  const hash = fnv1a(seed);
-  const random = (hash % 10000) / 10000;
-
-  // Select based on cumulative weights
-  let cumulative = 0;
-  for (let i = 0; i < weights.length; i++) {
-    cumulative += weights[i];
-    if (random < cumulative) {
-      return i;
-    }
-  }
-
-  // Fallback to last allocation (handles floating point edge cases)
-  return weights.length - 1;
 }
 
 /**
@@ -380,6 +350,24 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       }
 
       if (!evaluateConditions(policy.conditions, context)) continue;
+
+      // Contextual model scoring: overrides bucket-based allocation
+      if (policy.contextualModel) {
+        const ctxAllocation = resolveContextualPolicy(policy, context, unitKeyValue);
+        if (ctxAllocation) {
+          matchedPolicy = policy;
+          matchedAllocation = ctxAllocation;
+          matchedPolicies.push(policy);
+          if (hasParams) {
+            for (const [key, value] of Object.entries(ctxAllocation.overrides)) {
+              if (key in assignments) {
+                assignments[key] = value;
+              }
+            }
+          }
+          break;
+        }
+      }
 
       // Check if this is a per-entity policy
       if (policy.entityConfig && policy.entityConfig.resolutionMode === "bundle") {

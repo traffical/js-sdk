@@ -356,10 +356,14 @@ export interface LayerResolution {
   bucket: number;
   /** The policy that was applied (if any) */
   policyId?: Id;
+  /** Stable key of the matched policy (for warehouse data matching) */
+  policyKey?: string;
   /** The allocation ID that was selected (if any) */
   allocationId?: Id;
   /** The allocation/variant name that was selected (if any) */
   allocationName?: string;
+  /** Stable key of the matched allocation (for warehouse data matching) */
+  allocationKey?: string;
   /**
    * When true, this layer was resolved for attribution/assignment purposes only —
    * no parameters from this layer were requested by the caller.
@@ -518,6 +522,54 @@ export interface DecisionEvent extends BaseEventFields {
 export type TrackableEvent = ExposureEvent | TrackEvent | DecisionEvent;
 
 // =============================================================================
+// Warehouse-Native Assignment Logger Types
+// =============================================================================
+
+/**
+ * Structured assignment log entry for warehouse-native analytics.
+ *
+ * Emitted by the optional `assignmentLogger` callback. Contains exactly
+ * the fields needed for an AssignmentDefinition SQL source in the
+ * warehouse-native pipeline.
+ *
+ * Customers route these to their own pipeline (Segment, Rudderstack,
+ * direct DB writes) → warehouse table → AssignmentDefinition SQL reads it.
+ */
+export interface AssignmentLogEntry {
+  /** The unit key / entity identifier (e.g., user_id) */
+  unitKey: string;
+  /** The policy (experiment) identifier — matches AssignmentColumnMapping.policyKey */
+  policyId: string;
+  /** Stable key of the policy (for warehouse data matching) */
+  policyKey?: string;
+  /** The allocation (variant) name — matches AssignmentColumnMapping.allocationKey */
+  allocationName: string;
+  /** Stable key of the allocation (for warehouse data matching) */
+  allocationKey?: string;
+  /** ISO 8601 timestamp of the assignment */
+  timestamp: string;
+  /** The layer this assignment came from */
+  layerId: string;
+  /** The allocation ID (if available) */
+  allocationId?: string;
+  /** Organization ID */
+  orgId: string;
+  /** Project ID */
+  projectId: string;
+  /** Environment */
+  env: string;
+  /** SDK name that produced this entry */
+  sdkName?: string;
+  /** SDK version */
+  sdkVersion?: string;
+  /** Optional: context/properties for segmentation (CUPED covariates) */
+  properties?: Record<string, unknown>;
+}
+
+/** Callback type for routing assignment events to a customer-managed pipeline. */
+export type AssignmentLogger = (entry: AssignmentLogEntry) => void;
+
+// =============================================================================
 // Client Configuration Types
 // =============================================================================
 
@@ -541,6 +593,31 @@ export interface TrafficalClientOptions {
   refreshIntervalMs?: number;
   /** Strict mode: throw on unknown or deprecated parameters */
   strictMode?: boolean;
+
+  /**
+   * Optional callback for routing assignment events to a customer-managed
+   * pipeline (e.g., Segment, Rudderstack, direct DB writes).
+   *
+   * When provided, called on every decide()/trackExposure() with a structured
+   * AssignmentLogEntry. This enables the "BYO assignment pipeline"
+   * pattern for warehouse-native analytics.
+   */
+  assignmentLogger?: AssignmentLogger;
+
+  /**
+   * When true, the SDK will NOT send events (decisions, exposures, tracks)
+   * to the Traffical control plane. The SDK still fetches config from
+   * Traffical CDN/edge for flag evaluation.
+   *
+   * Default: false (events sent to Traffical as normal)
+   */
+  disableCloudEvents?: boolean;
+
+  /**
+   * When true, assignment logger calls are deduplicated per session
+   * (same unit+policy+variant won't fire again). Default: true.
+   */
+  deduplicateAssignmentLogger?: boolean;
 }
 
 /**

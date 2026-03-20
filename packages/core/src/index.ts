@@ -52,6 +52,9 @@ export type {
   TrackAttribution,
   DecisionEvent,
   TrackableEvent,
+  // Warehouse-native assignment logger types
+  AssignmentLogEntry,
+  AssignmentLogger,
   // Client types
   TrafficalClientOptions,
   GetParamsOptions,

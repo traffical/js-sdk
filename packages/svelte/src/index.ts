@@ -74,6 +74,11 @@ export {
   generateTrackEventId,
 } from "@traffical/core";
 
+export type {
+  AssignmentLogEntry,
+  AssignmentLogger,
+} from "@traffical/core";
+
 // =============================================================================
 // Re-export from @traffical/js-client
 // =============================================================================
@@ -89,6 +94,8 @@ export {
   createStorageProvider,
   // Plugins
   createDOMBindingPlugin,
+  // Warehouse-native logger
+  createWarehouseNativeLoggerPlugin,
 } from "@traffical/js-client";
 
 // =============================================================================
@@ -141,4 +148,6 @@ export type {
   TrafficalClient as TrafficalClientType,
   TrafficalPlugin,
 } from "./types.js";
+
+export type { WarehouseNativeLoggerOptions } from "@traffical/js-client";
 

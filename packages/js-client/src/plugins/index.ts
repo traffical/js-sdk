@@ -236,3 +236,8 @@ export {
   type RedirectAttributionPluginOptions,
 } from "./redirect-attribution.js";
 
+export {
+  createWarehouseNativeLoggerPlugin,
+  type WarehouseNativeLoggerOptions,
+} from "./warehouse-native-logger.js";
+

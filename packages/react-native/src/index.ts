@@ -14,6 +14,8 @@ export {
   type PluginOptions,
   ErrorBoundary,
   type ErrorBoundaryOptions,
+  createWarehouseNativeLoggerPlugin,
+  type WarehouseNativeLoggerOptions,
 } from "@traffical/js-client";
 
 // RN-specific exports

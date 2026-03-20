@@ -58,6 +58,8 @@ export {
   createDOMBindingPlugin,
   type DOMBindingPlugin,
   type DOMBindingPluginOptions,
+  createWarehouseNativeLoggerPlugin,
+  type WarehouseNativeLoggerOptions,
 } from "@traffical/js-client";
 
 // Export React-specific components and hooks

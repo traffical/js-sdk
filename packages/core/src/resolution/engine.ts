@@ -451,8 +451,10 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       layerId: layer.id,
       bucket,
       policyId: matchedPolicy?.id,
+      policyKey: (matchedPolicy as any)?.key,
       allocationId: matchedAllocation?.id,
       allocationName: matchedAllocation?.name,
+      allocationKey: (matchedAllocation as any)?.key,
       // Mark layers without requested parameters as attribution-only.
       // These are included in decision events and track-event attribution
       // but skipped by trackExposure() to avoid exposure inflation.

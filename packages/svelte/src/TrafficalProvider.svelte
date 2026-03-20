@@ -5,7 +5,7 @@
   Alternative to calling initTraffical() directly in your layout.
 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import type { Snippet } from "svelte";
   import { initTraffical } from "./context.svelte.js";
   import type { TrafficalProviderConfig } from "./types.js";
@@ -19,9 +19,9 @@
 
   let { config, children }: Props = $props();
 
-  // Initialize context - this sets up the client and makes it available to children
-  // Note: Client is created but initialize() is NOT called yet to avoid SSR fetch warnings
-  const context = initTraffical(config);
+  // Initialize context with the initial config value (intentionally non-reactive;
+  // setContext must run during component init, and provider config doesn't change).
+  const context = untrack(() => initTraffical(config));
 
   // Initialize the client ONLY on the client-side after mount
   // This prevents the "Avoid calling fetch eagerly during SSR" warning

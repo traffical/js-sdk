@@ -74,3 +74,9 @@ export {
   type DOMBindingPluginOptions,
 } from "./plugins/dom-binding.js";
 
+// Export warehouse-native logger
+export {
+  createWarehouseNativeLoggerPlugin,
+  type WarehouseNativeLoggerOptions,
+} from "./plugins/warehouse-native-logger.js";
+

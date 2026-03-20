@@ -22,6 +22,7 @@ import {
   type BundlePolicy,
   type ServerResolveResponse,
   type ResolveOptions,
+  type AssignmentLogger,
   resolveParameters,
   decide as coreDecide,
   getUnitKeyValue,
@@ -115,6 +116,31 @@ export interface TrafficalClientOptions {
   evaluationMode?: "bundle" | "server";
   /** Lifecycle provider for visibility/unload events (default: browser lifecycle) */
   lifecycleProvider?: LifecycleProvider;
+
+  /**
+   * Optional callback for routing assignment events to a customer-managed
+   * pipeline (e.g., Segment, Rudderstack, direct DB writes).
+   *
+   * When provided, called on every decide()/trackExposure() with a structured
+   * AssignmentLogEntry. Enables the "BYO assignment pipeline" pattern for
+   * warehouse-native analytics.
+   */
+  assignmentLogger?: AssignmentLogger;
+
+  /**
+   * When true, the SDK will NOT send events (decisions, exposures, tracks)
+   * to the Traffical control plane. The SDK still fetches config from
+   * Traffical CDN/edge for flag evaluation.
+   *
+   * Default: false
+   */
+  disableCloudEvents?: boolean;
+
+  /**
+   * When true, assignment logger calls are deduplicated per session
+   * (same unit+policy+variant won't fire again). Default: true.
+   */
+  deduplicateAssignmentLogger?: boolean;
 }
 
 interface ClientState {
@@ -162,6 +188,9 @@ export class TrafficalClient {
   private readonly _plugins: PluginManager;
   private readonly _lifecycleProvider: LifecycleProvider;
   private readonly _decisionClient: DecisionClient | null;
+  private readonly _assignmentLogger?: AssignmentLogger;
+  private readonly _disableCloudEvents: boolean;
+  private readonly _assignmentLoggerDedup: ExposureDeduplicator | null;
   /** Cache of recent decisions for attribution lookup when track() is called */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
   /**
@@ -225,8 +254,15 @@ export class TrafficalClient {
 
     this._plugins = new PluginManager();
 
-    // Register decision tracking plugin (enabled by default)
-    if (options.trackDecisions !== false) {
+    // Warehouse-native options
+    this._assignmentLogger = options.assignmentLogger;
+    this._disableCloudEvents = options.disableCloudEvents ?? false;
+    this._assignmentLoggerDedup = (options.deduplicateAssignmentLogger !== false && options.assignmentLogger)
+      ? new ExposureDeduplicator({ storage: this._storage, sessionTtlMs: options.exposureSessionTtlMs })
+      : null;
+
+    // Register decision tracking plugin (enabled by default, skipped when cloud events disabled)
+    if (options.trackDecisions !== false && !this._disableCloudEvents) {
       this._plugins.register({
         plugin: createDecisionTrackingPlugin(
           { deduplicationTtlMs: options.decisionDeduplicationTtlMs },
@@ -393,6 +429,7 @@ export class TrafficalClient {
           this._cacheDecision(decision);
           this._updateCumulativeAttribution(decision);
           this._plugins.runDecision(decision);
+          this._emitAssignmentLogEntries(decision);
           return decision;
         }
 
@@ -413,6 +450,8 @@ export class TrafficalClient {
 
         // Run plugin onDecision hooks (e.g., DOM binding plugin)
         this._plugins.runDecision(decision);
+
+        this._emitAssignmentLogEntries(decision);
 
         return decision;
       },
@@ -447,6 +486,9 @@ export class TrafficalClient {
         const unitKey = decision.metadata.unitKeyValue;
         if (!unitKey) return;
 
+        // Emit to assignment logger (separate from cloud events)
+        this._emitAssignmentLogEntries(decision);
+
         // Check each layer for deduplication
         for (const layer of decision.metadata.layers) {
           if (!layer.policyId || !layer.allocationName) continue;
@@ -480,7 +522,9 @@ export class TrafficalClient {
             continue;
           }
 
-          this._eventLogger.log(event);
+          if (!this._disableCloudEvents) {
+            this._eventLogger.log(event);
+          }
         }
       },
       undefined
@@ -541,7 +585,9 @@ export class TrafficalClient {
           return;
         }
 
-        this._eventLogger.log(event);
+        if (!this._disableCloudEvents) {
+          this._eventLogger.log(event);
+        }
       },
       undefined
     );
@@ -596,6 +642,39 @@ export class TrafficalClient {
   // ===========================================================================
   // Private Methods
   // ===========================================================================
+
+  private _emitAssignmentLogEntries(decision: DecisionResult): void {
+    if (!this._assignmentLogger) return;
+    const unitKey = decision.metadata.unitKeyValue;
+    if (!unitKey) return;
+
+    for (const layer of decision.metadata.layers) {
+      if (!layer.policyId || !layer.allocationName) continue;
+
+      // Dedup: skip if we've already logged this unit+policy+allocation in this session
+      if (this._assignmentLoggerDedup) {
+        const isNew = this._assignmentLoggerDedup.checkAndMark(unitKey, layer.policyId, layer.allocationName);
+        if (!isNew) continue;
+      }
+
+      this._assignmentLogger({
+        unitKey,
+        policyId: layer.policyId,
+        policyKey: layer.policyKey,
+        allocationName: layer.allocationName,
+        allocationKey: layer.allocationKey,
+        timestamp: decision.metadata.timestamp,
+        layerId: layer.layerId,
+        allocationId: layer.allocationId,
+        orgId: this._options.orgId,
+        projectId: this._options.projectId,
+        env: this._options.env,
+        sdkName: SDK_NAME,
+        sdkVersion: SDK_VERSION,
+        properties: decision.metadata.filteredContext,
+      });
+    }
+  }
 
   private _getEffectiveBundle(): ConfigBundle | null {
     return this._state.bundle ?? this._options.localConfig ?? null;

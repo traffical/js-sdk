@@ -65,7 +65,7 @@ export class DecisionClient {
           env: request.env ?? this.config.env,
           parameters: request.parameters,
         }),
-        signal: controller.signal,
+        signal: controller.signal as any,
       });
 
       clearTimeout(timeoutId);
@@ -111,7 +111,7 @@ export class DecisionClient {
           allocationCount: request.allocationCount,
           context: request.context,
         }),
-        signal: controller.signal,
+        signal: controller.signal as any,
       });
 
       clearTimeout(timeoutId);
@@ -158,7 +158,7 @@ export class DecisionClient {
         method: "POST",
         headers: this._headers(),
         body: JSON.stringify({ requests }),
-        signal: controller.signal,
+        signal: controller.signal as any,
       });
 
       clearTimeout(timeoutId);

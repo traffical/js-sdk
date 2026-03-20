@@ -24,6 +24,7 @@ import {
   type TrackAttribution,
   type DecisionEvent,
   type ServerResolveResponse,
+  type AssignmentLogger,
   resolveParameters,
   decide as coreDecide,
   DecisionDeduplicator,
@@ -46,6 +47,8 @@ const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
 const OFFLINE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
 const DECISION_CACHE_MAX_SIZE = 1000; // Max decisions to cache for attribution lookup
+const ASSIGNMENT_LOGGER_LRU_MAX = 10_000;
+const ASSIGNMENT_LOGGER_LRU_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // =============================================================================
 // Types
@@ -85,6 +88,24 @@ export interface TrafficalClientOptions extends CoreClientOptions {
    * - "server": SDK delegates resolution to the edge worker via POST /v1/resolve.
    */
   evaluationMode?: "bundle" | "server";
+
+  /**
+   * Optional callback for routing assignment events to a customer-managed
+   * pipeline (e.g., Segment, Rudderstack, direct DB writes).
+   */
+  assignmentLogger?: AssignmentLogger;
+
+  /**
+   * When true, the SDK will NOT send events to the Traffical control plane.
+   * Default: false
+   */
+  disableCloudEvents?: boolean;
+
+  /**
+   * When true, assignment logger calls are deduplicated via in-memory LRU
+   * (same unit+policy+variant won't fire again within TTL). Default: true.
+   */
+  deduplicateAssignmentLogger?: boolean;
 }
 
 // =============================================================================
@@ -141,6 +162,10 @@ export class TrafficalClient {
   private readonly _eventBatcher: EventBatcher;
   private readonly _decisionDedup: DecisionDeduplicator;
   private readonly _decisionClient: DecisionClient;
+  private readonly _assignmentLogger?: AssignmentLogger;
+  private readonly _disableCloudEvents: boolean;
+  /** In-memory LRU for assignment logger deduplication: key → expiry timestamp */
+  private readonly _assignmentLoggerDedup: Map<string, number> | null;
   /** Cache of recent decisions for attribution lookup on rewards */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
 
@@ -183,6 +208,13 @@ export class TrafficalClient {
     this._decisionDedup = new DecisionDeduplicator({
       ttlMs: options.decisionDeduplicationTtlMs,
     });
+
+    // Warehouse-native options
+    this._assignmentLogger = options.assignmentLogger;
+    this._disableCloudEvents = options.disableCloudEvents ?? false;
+    this._assignmentLoggerDedup = (options.deduplicateAssignmentLogger !== false && options.assignmentLogger)
+      ? new Map<string, number>()
+      : null;
 
     // Initialize with local config if provided
     if (this._options.localConfig) {
@@ -307,6 +339,7 @@ export class TrafficalClient {
       if (this._options.trackDecisions) {
         this._trackDecision(decision, Date.now() - start, Object.keys(options.defaults));
       }
+      this._emitAssignmentLogEntries(decision);
       return decision;
     }
 
@@ -320,6 +353,8 @@ export class TrafficalClient {
       this._trackDecision(decision, latencyMs, Object.keys(options.defaults));
     }
 
+    this._emitAssignmentLogEntries(decision);
+
     return decision;
   }
 
@@ -332,28 +367,31 @@ export class TrafficalClient {
   trackExposure(decision: DecisionResult): void {
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) {
-      // Can't track without unit key
       return;
     }
 
-    const event: ExposureEvent = {
-      type: "exposure",
-      id: generateExposureId(), // Unique exposure ID (not same as decision)
-      decisionId: decision.decisionId,
-      orgId: this._options.orgId,
-      projectId: this._options.projectId,
-      env: this._options.env,
-      unitKey,
-      timestamp: new Date().toISOString(),
-      assignments: decision.assignments,
-      layers: decision.metadata.layers,
-      // Include filtered context for contextual bandit training
-      context: decision.metadata.filteredContext,
-      sdkName: SDK_NAME,
-      sdkVersion: SDK_VERSION,
-    };
+    // Emit to assignment logger (separate from cloud events)
+    this._emitAssignmentLogEntries(decision);
 
-    this._eventBatcher.log(event);
+    if (!this._disableCloudEvents) {
+      const event: ExposureEvent = {
+        type: "exposure",
+        id: generateExposureId(),
+        decisionId: decision.decisionId,
+        orgId: this._options.orgId,
+        projectId: this._options.projectId,
+        env: this._options.env,
+        unitKey,
+        timestamp: new Date().toISOString(),
+        assignments: decision.assignments,
+        layers: decision.metadata.layers,
+        context: decision.metadata.filteredContext,
+        sdkName: SDK_NAME,
+        sdkVersion: SDK_VERSION,
+      };
+
+      this._eventBatcher.log(event);
+    }
   }
 
   /**
@@ -379,24 +417,26 @@ export class TrafficalClient {
     // Auto-populate attribution from cached decision if available
     const attribution = this._getAttributionFromCache(options?.decisionId);
 
-    const trackEvent: TrackEvent = {
-      type: "track",
-      id: generateTrackEventId(),
-      orgId: this._options.orgId,
-      projectId: this._options.projectId,
-      env: this._options.env,
-      unitKey: options?.unitKey || "",
-      timestamp: new Date().toISOString(),
-      event,
-      value,
-      properties,
-      decisionId: options?.decisionId,
-      attribution,
-      sdkName: SDK_NAME,
-      sdkVersion: SDK_VERSION,
-    };
+    if (!this._disableCloudEvents) {
+      const trackEvent: TrackEvent = {
+        type: "track",
+        id: generateTrackEventId(),
+        orgId: this._options.orgId,
+        projectId: this._options.projectId,
+        env: this._options.env,
+        unitKey: options?.unitKey || "",
+        timestamp: new Date().toISOString(),
+        event,
+        value,
+        properties,
+        decisionId: options?.decisionId,
+        attribution,
+        sdkName: SDK_NAME,
+        sdkVersion: SDK_VERSION,
+      };
 
-    this._eventBatcher.log(trackEvent);
+      this._eventBatcher.log(trackEvent);
+    }
   }
 
   /**
@@ -414,6 +454,46 @@ export class TrafficalClient {
   // ===========================================================================
   // Private Methods
   // ===========================================================================
+
+  private _emitAssignmentLogEntries(decision: DecisionResult): void {
+    if (!this._assignmentLogger) return;
+    const unitKey = decision.metadata.unitKeyValue;
+    if (!unitKey) return;
+
+    const now = Date.now();
+
+    for (const layer of decision.metadata.layers) {
+      if (!layer.policyId || !layer.allocationName) continue;
+
+      if (this._assignmentLoggerDedup) {
+        const dedupKey = `${unitKey}:${layer.policyId}:${layer.allocationName}`;
+        const expiry = this._assignmentLoggerDedup.get(dedupKey);
+        if (expiry !== undefined && now < expiry) continue;
+
+        // Evict oldest entries when LRU is full
+        if (this._assignmentLoggerDedup.size >= ASSIGNMENT_LOGGER_LRU_MAX) {
+          const firstKey = this._assignmentLoggerDedup.keys().next().value;
+          if (firstKey) this._assignmentLoggerDedup.delete(firstKey);
+        }
+        this._assignmentLoggerDedup.set(dedupKey, now + ASSIGNMENT_LOGGER_LRU_TTL_MS);
+      }
+
+      this._assignmentLogger({
+        unitKey,
+        policyId: layer.policyId,
+        allocationName: layer.allocationName,
+        timestamp: decision.metadata.timestamp,
+        layerId: layer.layerId,
+        allocationId: layer.allocationId,
+        orgId: this._options.orgId,
+        projectId: this._options.projectId,
+        env: this._options.env,
+        sdkName: SDK_NAME,
+        sdkVersion: SDK_VERSION,
+        properties: decision.metadata.filteredContext,
+      });
+    }
+  }
 
   /**
    * Gets the effective bundle: remote > local > null
@@ -521,9 +601,10 @@ export class TrafficalClient {
     latencyMs: number,
     requestedParameters: string[]
   ): void {
+    if (this._disableCloudEvents) return;
+
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) {
-      // Can't track without unit key
       return;
     }
 

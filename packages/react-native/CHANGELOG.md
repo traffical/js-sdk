@@ -1,5 +1,17 @@
 # @traffical/react-native
 
+## 0.4.0
+
+### Minor Changes
+
+- 23925fe: Add warehouse-native assignment logging and sync support with AssignmentLogger callback, batched warehouse-native-logger plugin, and managed server-side sync
+
+### Patch Changes
+
+- Updated dependencies [23925fe]
+  - @traffical/js-client@0.6.0
+  - @traffical/core@0.5.0
+
 ## 0.3.2
 
 ### Patch Changes

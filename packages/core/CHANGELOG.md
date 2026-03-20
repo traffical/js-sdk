@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.5.0
+
+### Minor Changes
+
+- 23925fe: Add warehouse-native assignment logging and sync support with AssignmentLogger callback, batched warehouse-native-logger plugin, and managed server-side sync
+
 ## 0.4.0
 
 ### Minor Changes

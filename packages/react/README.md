@@ -575,6 +575,30 @@ function CheckoutPage() {
 
 ---
 
+## Changing User Identity
+
+Use `client.identify()` to switch user identity mid-session (e.g., after login or logout). The provider automatically re-renders all `useTraffical` hooks with new assignments.
+
+```tsx
+import { useTrafficalClient } from '@traffical/react';
+
+function LoginButton() {
+  const { client } = useTrafficalClient();
+
+  const handleLogin = async () => {
+    const user = await loginApi();
+    // All useTraffical hooks re-evaluate with the new identity
+    client?.identify(user.id);
+  };
+
+  return <button onClick={handleLogin}>Log In</button>;
+}
+```
+
+This also works from Traffical DevTools — changing the user ID in DevTools calls `identify()` under the hood, causing the UI to update in real time.
+
+---
+
 ## Architecture Patterns
 
 ### Pattern A: Page-Level Parameters (Recommended for Simple Pages)

@@ -402,6 +402,24 @@ const params = resolveParamsSSR(bundle, { userId: 'user_123' }, {
 });
 ```
 
+## Changing User Identity
+
+Use `client.identify()` to switch user identity mid-session. All `useTraffical` hooks automatically re-derive with new assignments.
+
+```svelte
+<script>
+  import { useTrafficalClient } from '@traffical/svelte';
+
+  const { client } = useTrafficalClient();
+
+  function handleLogin(userId: string) {
+    client?.identify(userId);
+  }
+</script>
+```
+
+This also works from Traffical DevTools — changing the user ID in DevTools calls `identify()` under the hood, causing reactive updates across all components.
+
 ## Configuration Options
 
 ```typescript

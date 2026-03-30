@@ -119,6 +119,20 @@ createTrafficalClient({
 });
 ```
 
+## Changing User Identity
+
+Use `identify()` to switch the user identity mid-session (e.g., after login). All framework providers (React, Svelte, React Native) automatically re-evaluate decisions and update the UI.
+
+```typescript
+// After user logs in
+traffical.identify('user_logged_in_123');
+
+// After logout — revert to anonymous
+traffical.identify(crypto.randomUUID());
+```
+
+Unlike `setStableId()` (which silently changes the internal ID), `identify()` notifies all subscribers — framework providers re-render, the debug plugin updates, and DevTools reflects the change.
+
 ## Features
 
 - **Error Boundary** - SDK errors never crash your app

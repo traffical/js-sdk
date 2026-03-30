@@ -30,16 +30,28 @@ export function TrafficalRNProvider({
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [resolveVersion, setResolveVersion] = useState(0);
+  const [overrideUnitKey, setOverrideUnitKey] = useState<string | null>(null);
 
   const clientRef = useRef<TrafficalRNClient | null>(null);
   const prevUnitKeyRef = useRef<string | null>(null);
 
+  // Subscribe to identity changes from client.identify()
+  useEffect(() => {
+    if (!client) return;
+    return client.onIdentityChange((newKey) => {
+      setOverrideUnitKey(newKey);
+    });
+  }, [client]);
+
   const getUnitKey = useCallback(() => {
+    if (overrideUnitKey !== null) {
+      return overrideUnitKey;
+    }
     if (config.unitKeyFn) {
       return config.unitKeyFn();
     }
     return clientRef.current?.getStableId() ?? "";
-  }, [config.unitKeyFn]);
+  }, [overrideUnitKey, config.unitKeyFn]);
 
   const getContext = useCallback((): Context => {
     const unitKey = getUnitKey();

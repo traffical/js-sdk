@@ -52,6 +52,7 @@ function createTrafficalContextState(
   let ready = $state(!!config.initialBundle); // Ready immediately if we have initial bundle
   let error = $state<Error | null>(null);
   let bundle = $state(config.initialBundle ?? null);
+  let overrideUnitKey = $state<string | null>(null);
 
   // Initialize client only in browser
   // NOTE: We create the client but DO NOT call initialize() here.
@@ -83,6 +84,11 @@ function createTrafficalContextState(
     });
 
     client = clientInstance;
+
+    // Subscribe to identity changes from client.identify()
+    clientInstance.onIdentityChange((newKey: string) => {
+      overrideUnitKey = newKey;
+    });
     
     // If we have initial bundle, mark as ready immediately (no fetch needed for initial render)
     if (config.initialBundle) {
@@ -108,12 +114,14 @@ function createTrafficalContextState(
     }
   }
 
-  // Unit key getter - uses config function or client's stable ID
+  // Unit key getter — priority: identify() override > unitKeyFn > auto stable ID
   function getUnitKey(): string {
+    if (overrideUnitKey !== null) {
+      return overrideUnitKey;
+    }
     if (config.unitKeyFn) {
       return config.unitKeyFn();
     }
-    // Fall back to client's auto-generated stable ID
     return client?.getStableId() ?? "";
   }
 

@@ -31,9 +31,10 @@ export interface PluginClientAPI {
   ): void;
   trackExposure(decision: DecisionResult): void;
 
-  // Debug-oriented (optional, present on TrafficalClient)
+  // Identity & debug-oriented (optional, present on TrafficalClient)
   getStableId?(): string;
   setStableId?(id: string): void;
+  identify?(unitKey: string): void;
   getConfigVersion?(): string | null;
   refreshConfig?(): Promise<void>;
   readonly isInitialized?: boolean;

@@ -201,6 +201,7 @@ export class TrafficalClient {
    * flood the decision cache and evict earlier page-level decisions.
    */
   private readonly _cumulativeAttribution: Map<string, Map<string, TrackAttribution>> = new Map();
+  private _identityListeners: Array<(unitKey: string) => void> = [];
 
   constructor(options: TrafficalClientOptions) {
     const evaluationMode = options.evaluationMode ?? "bundle";
@@ -350,6 +351,9 @@ export class TrafficalClient {
 
     // Run plugin onDestroy hooks
     this._plugins.runDestroy();
+
+    // Clear identity listeners
+    this._identityListeners = [];
 
     // Remove from global instance list
     if (typeof window !== "undefined") {
@@ -670,9 +674,42 @@ export class TrafficalClient {
 
   /**
    * Set a custom stable ID (e.g., when user logs in).
+   * Low-level — does NOT notify framework providers. Use `identify()` instead
+   * when you want the UI to update.
    */
   setStableId(id: string): void {
     this._stableId.setId(id);
+  }
+
+  /**
+   * Change the user identity and notify all listeners (framework providers,
+   * plugins, DevTools). This causes React/Svelte/RN providers to re-evaluate
+   * decisions with the new identity, updating the UI.
+   *
+   * @example
+   * // After user logs in
+   * client.identify('user_logged_in_123');
+   */
+  identify(unitKey: string): void {
+    this._stableId.setId(unitKey);
+    for (const cb of this._identityListeners) {
+      try {
+        cb(unitKey);
+      } catch {
+        // Ignore listener errors
+      }
+    }
+  }
+
+  /**
+   * Subscribe to identity changes triggered by `identify()`.
+   * Returns an unsubscribe function.
+   */
+  onIdentityChange(cb: (unitKey: string) => void): () => void {
+    this._identityListeners.push(cb);
+    return () => {
+      this._identityListeners = this._identityListeners.filter(l => l !== cb);
+    };
   }
 
   // ===========================================================================

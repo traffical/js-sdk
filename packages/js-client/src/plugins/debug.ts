@@ -263,10 +263,12 @@ export function createDebugPlugin(
     },
 
     setUnitKey(key: string): void {
-      if (_client?.setStableId) {
+      if (_client?.identify) {
+        _client.identify(key);
+      } else if (_client?.setStableId) {
         _client.setStableId(key);
-        notifyStateListeners();
       }
+      notifyStateListeners();
     },
 
     reDecide(): void {

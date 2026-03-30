@@ -70,19 +70,30 @@ export function TrafficalProvider({
   const [client, setClient] = useState<TrafficalClient | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [overrideUnitKey, setOverrideUnitKey] = useState<string | null>(null);
 
   // Keep a ref to the client for cleanup
   const clientRef = useRef<TrafficalClient | null>(null);
 
+  // Subscribe to identity changes from client.identify()
+  useEffect(() => {
+    if (!client) return;
+    return client.onIdentityChange((newKey) => {
+      setOverrideUnitKey(newKey);
+    });
+  }, [client]);
+
   // Memoize the unit key function
-  // If no unitKeyFn is provided, use the client's stable ID
+  // Priority: identify() override > unitKeyFn > auto-generated stable ID
   const getUnitKey = useCallback(() => {
+    if (overrideUnitKey !== null) {
+      return overrideUnitKey;
+    }
     if (config.unitKeyFn) {
       return config.unitKeyFn();
     }
-    // Fall back to the client's auto-generated stable ID
     return clientRef.current?.getStableId() ?? "";
-  }, [config.unitKeyFn]);
+  }, [overrideUnitKey, config.unitKeyFn]);
 
   const getContext = useCallback((): Context => {
     const unitKey = getUnitKey();

@@ -14,9 +14,9 @@
 import type { TrafficalPlugin } from "./types.js";
 import type { DecisionResult, DecisionEvent, ParameterValue } from "@traffical/core";
 import { DecisionDeduplicator } from "@traffical/core";
+import { SDK_VERSION } from "../version.js";
 
 const SDK_NAME = "js-client";
-const SDK_VERSION = "0.1.0"; // Should match package.json version
 
 /**
  * Options for the DecisionTrackingPlugin.

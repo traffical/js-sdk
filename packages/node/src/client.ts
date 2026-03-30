@@ -35,13 +35,13 @@ import {
 import { DecisionClient } from "@traffical/core-io";
 
 import { EventBatcher } from "./event-batcher.js";
+import { SDK_VERSION } from "./version.js";
 
 // =============================================================================
 // Constants
 // =============================================================================
 
 const SDK_NAME = "node";
-const SDK_VERSION = "0.1.0"; // Should match package.json version
 
 const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute

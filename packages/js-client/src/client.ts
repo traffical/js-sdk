@@ -44,13 +44,13 @@ import { StableIdProvider } from "./stable-id.js";
 import { createStorageProvider, type StorageProvider } from "./storage.js";
 import { PluginManager, type TrafficalPlugin, createDecisionTrackingPlugin } from "./plugins/index.js";
 import { createBrowserLifecycleProvider, type LifecycleProvider } from "./lifecycle.js";
+import { SDK_VERSION } from "./version.js";
 
 // =============================================================================
 // Constants
 // =============================================================================
 
 const SDK_NAME = "js-client";
-const SDK_VERSION = "0.1.0"; // Should match package.json version
 
 const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
@@ -290,6 +290,13 @@ export class TrafficalClient {
       // Notify plugins about the local config
       this._plugins.runConfigUpdate(this._options.localConfig);
     }
+
+    // Register on global instance list so DevTools can discover ES-module SDKs
+    if (typeof window !== "undefined") {
+      const w = window as unknown as Record<string, unknown>;
+      (w.__TRAFFICAL_INSTANCES__ ??= [] as TrafficalClient[]) as TrafficalClient[];
+      (w.__TRAFFICAL_INSTANCES__ as TrafficalClient[]).push(this);
+    }
   }
 
   // ===========================================================================
@@ -343,6 +350,16 @@ export class TrafficalClient {
 
     // Run plugin onDestroy hooks
     this._plugins.runDestroy();
+
+    // Remove from global instance list
+    if (typeof window !== "undefined") {
+      const w = window as unknown as Record<string, unknown>;
+      const instances = w.__TRAFFICAL_INSTANCES__ as TrafficalClient[] | undefined;
+      if (instances) {
+        const idx = instances.indexOf(this);
+        if (idx !== -1) instances.splice(idx, 1);
+      }
+    }
   }
 
   // ===========================================================================
@@ -608,9 +625,28 @@ export class TrafficalClient {
 
   /**
    * Register a plugin.
+   * If the client is already initialized, fires onInitialize and onConfigUpdate
+   * immediately so late-registered plugins (e.g. debug plugin) work correctly.
    */
   use(plugin: TrafficalPlugin): this {
-    this._plugins.register(plugin);
+    const added = this._plugins.register(plugin);
+    if (!added) return this;
+
+    if (this._state.isInitialized) {
+      try {
+        plugin.onInitialize?.(this);
+      } catch (error) {
+        console.warn(`[Traffical] Plugin "${plugin.name}" late onInitialize error:`, error);
+      }
+      if (this._state.bundle) {
+        try {
+          plugin.onConfigUpdate?.(this._state.bundle);
+        } catch (error) {
+          console.warn(`[Traffical] Plugin "${plugin.name}" late onConfigUpdate error:`, error);
+        }
+      }
+    }
+
     return this;
   }
 

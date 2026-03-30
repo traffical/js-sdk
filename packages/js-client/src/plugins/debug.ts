@@ -38,6 +38,7 @@ import type {
   LayerResolution,
 } from "@traffical/core";
 import type { TrafficalPlugin, PluginClientAPI } from "./types.js";
+import { SDK_VERSION } from "../version.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -104,6 +105,7 @@ export interface TrafficalDebugRegistry {
 declare global {
   interface Window {
     __TRAFFICAL_DEBUG__?: TrafficalDebugRegistry;
+    __TRAFFICAL_INSTANCES__?: unknown[];
   }
 }
 
@@ -164,7 +166,6 @@ function generateEventId(): string {
 // ---------------------------------------------------------------------------
 
 const PLUGIN_NAME = "traffical-debug";
-const SDK_VERSION = "__SDK_VERSION__"; // Replaced at build time or fallback
 
 export function createDebugPlugin(
   options: DebugPluginOptions = {},

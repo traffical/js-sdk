@@ -23,22 +23,21 @@ export class PluginManager {
   private _plugins: RegisteredPlugin[] = [];
 
   /**
-   * Register a plugin.
+   * Register a plugin. Returns true if the plugin was added,
+   * false if a plugin with the same name is already registered.
    */
-  register(options: PluginOptions | TrafficalPlugin): void {
+  register(options: PluginOptions | TrafficalPlugin): boolean {
     const plugin = "plugin" in options ? options.plugin : options;
     const priority = "priority" in options ? (options.priority ?? 0) : 0;
 
-    // Check for duplicate names
     if (this._plugins.some((p) => p.plugin.name === plugin.name)) {
       console.warn(`[Traffical] Plugin "${plugin.name}" already registered, skipping.`);
-      return;
+      return false;
     }
 
     this._plugins.push({ plugin, priority });
-
-    // Sort by priority (descending - higher priority first)
     this._plugins.sort((a, b) => b.priority - a.priority);
+    return true;
   }
 
   /**

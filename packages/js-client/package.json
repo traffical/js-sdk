@@ -16,7 +16,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun run build:esm && bun run build:iife",
+    "build": "bun run generate-version && bun run build:esm && bun run build:iife",
+    "generate-version": "bun run ../../scripts/generate-version.ts",
     "build:esm": "tsc",
     "build:iife": "bun run esbuild.config.ts",
     "dev": "tsc --watch",

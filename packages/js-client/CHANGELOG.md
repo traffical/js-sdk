@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.9.1
+
+### Patch Changes
+
+- 2645cbc: Add effectiveUnitKey to debug plugin state, capturing the actual unit key used for hashing from decision metadata
+
 ## 0.9.0
 
 ### Minor Changes

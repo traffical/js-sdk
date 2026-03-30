@@ -61,6 +61,8 @@ export interface DebugEvent {
 export interface DebugState {
   ready: boolean;
   stableId: string | null;
+  /** The unit key actually used for hashing (from last decision metadata). */
+  effectiveUnitKey: string | null;
   configVersion: string | null;
   assignments: Record<string, unknown>;
   layers: LayerResolution[];
@@ -179,6 +181,7 @@ export function createDebugPlugin(
   let _assignments: Record<string, unknown> = {};
   let _layers: LayerResolution[] = [];
   let _lastDecisionId: string | null = null;
+  let _effectiveUnitKey: string | null = null;
   const _events: DebugEvent[] = [];
   let _stateListeners: Array<(state: DebugState) => void> = [];
   let _eventListeners: Array<(event: DebugEvent) => void> = [];
@@ -187,6 +190,7 @@ export function createDebugPlugin(
     return {
       ready: _client?.isInitialized === true,
       stableId: _client?.getStableId?.() ?? null,
+      effectiveUnitKey: _effectiveUnitKey,
       configVersion: _client?.getConfigVersion?.() ?? null,
       assignments: { ..._assignments },
       layers: [..._layers],
@@ -325,6 +329,9 @@ export function createDebugPlugin(
       _assignments = { ...decision.assignments };
       _layers = decision.metadata?.layers ? [...decision.metadata.layers] : [];
       _lastDecisionId = decision.decisionId;
+      if (decision.metadata?.unitKeyValue) {
+        _effectiveUnitKey = decision.metadata.unitKeyValue;
+      }
       pushEvent("decision", decision);
       notifyStateListeners();
     },

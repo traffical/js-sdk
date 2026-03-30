@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.8.0
+
+### Minor Changes
+
+- dc1ca31: Add global instance discovery (window.**TRAFFICAL_INSTANCES**) and late plugin initialization support. client.use() now fires onInitialize/onConfigUpdate immediately for already-initialized clients, enabling DevTools to attach debug plugins to running SDK instances. Auto-generate SDK_VERSION from package.json.
+
 ## 0.7.0
 
 ### Minor Changes

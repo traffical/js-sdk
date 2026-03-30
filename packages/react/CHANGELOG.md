@@ -1,5 +1,12 @@
 # @traffical/react
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [dc1ca31]
+  - @traffical/js-client@0.8.0
+
 ## 0.3.1
 
 ### Patch Changes

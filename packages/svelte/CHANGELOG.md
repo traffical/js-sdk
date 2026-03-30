@@ -1,5 +1,13 @@
 # @traffical/svelte
 
+## 0.3.3
+
+### Patch Changes
+
+- 9d1868d: Add identify() API for mid-session identity changes. client.identify(unitKey) updates the stable ID and notifies all framework providers (React, Svelte, React Native), causing automatic re-evaluation and UI updates. Useful for login/logout flows and Traffical DevTools. Debug plugin now uses identify() instead of setStableId().
+- Updated dependencies [9d1868d]
+  - @traffical/js-client@0.9.0
+
 ## 0.3.2
 
 ### Patch Changes

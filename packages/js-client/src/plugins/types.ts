@@ -30,6 +30,13 @@ export interface PluginClientAPI {
     options?: { decisionId?: string; unitKey?: string }
   ): void;
   trackExposure(decision: DecisionResult): void;
+
+  // Debug-oriented (optional, present on TrafficalClient)
+  getStableId?(): string;
+  setStableId?(id: string): void;
+  getConfigVersion?(): string | null;
+  refreshConfig?(): Promise<void>;
+  readonly isInitialized?: boolean;
 }
 
 /**

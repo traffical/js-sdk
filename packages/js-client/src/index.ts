@@ -80,3 +80,14 @@ export {
   type WarehouseNativeLoggerOptions,
 } from "./plugins/warehouse-native-logger.js";
 
+// Export debug plugin
+export {
+  createDebugPlugin,
+  type DebugPluginOptions,
+  type TrafficalDebugRegistry,
+  type TrafficalDebugInstance,
+  type DebugState,
+  type DebugEvent,
+  type RegistryEvent,
+} from "./plugins/debug.js";
+

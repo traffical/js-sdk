@@ -33,6 +33,10 @@ import {
   createRedirectAttributionPlugin,
   type RedirectAttributionPluginOptions,
 } from "./plugins/redirect-attribution.js";
+import {
+  createDebugPlugin,
+  type DebugPluginOptions,
+} from "./plugins/debug.js";
 
 // Global state for singleton pattern
 let _instance: TrafficalClient | null = null;
@@ -107,5 +111,8 @@ export {
   type RedirectPluginOptions,
   createRedirectAttributionPlugin,
   type RedirectAttributionPluginOptions,
+  // Debug plugin
+  createDebugPlugin,
+  type DebugPluginOptions,
 };
 

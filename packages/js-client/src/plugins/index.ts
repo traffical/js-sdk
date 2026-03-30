@@ -241,3 +241,13 @@ export {
   type WarehouseNativeLoggerOptions,
 } from "./warehouse-native-logger.js";
 
+export {
+  createDebugPlugin,
+  type DebugPluginOptions,
+  type TrafficalDebugRegistry,
+  type TrafficalDebugInstance,
+  type DebugState,
+  type DebugEvent,
+  type RegistryEvent,
+} from "./debug.js";
+

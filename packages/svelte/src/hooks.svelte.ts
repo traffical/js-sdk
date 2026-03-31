@@ -105,7 +105,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
   // This is synchronous and provides fine-grained reactivity
   const params = $derived.by((): T => {
     // Track override version so Svelte re-evaluates when overrides change
-    const _v = ctx.overrideVersion;
+    void ctx.overrideVersion;
 
     // Priority 1: Route through client.getParams() when available (applies overrides)
     if (ctx.client && ctx.bundle) {
@@ -136,7 +136,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
   // Derive decision reactively
   const decision = $derived.by((): DecisionResult | null => {
     // Track override version so Svelte re-evaluates when overrides change
-    const _v = ctx.overrideVersion;
+    void ctx.overrideVersion;
 
     if (!shouldTrackDecision) {
       return null;

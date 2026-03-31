@@ -1,5 +1,11 @@
 # @traffical/svelte
 
+## 0.3.7
+
+### Patch Changes
+
+- 811d16b: Bugfix in typecheck.
+
 ## 0.3.6
 
 ### Patch Changes

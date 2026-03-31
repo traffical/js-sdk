@@ -1,5 +1,12 @@
 # @traffical/react-native
 
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [fcc170e]
+  - @traffical/js-client@0.9.2
+
 ## 0.4.4
 
 ### Patch Changes

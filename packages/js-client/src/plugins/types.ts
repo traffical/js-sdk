@@ -38,6 +38,11 @@ export interface PluginClientAPI {
   getConfigVersion?(): string | null;
   refreshConfig?(): Promise<void>;
   readonly isInitialized?: boolean;
+
+  // Parameter overrides (plugin-only API, not exposed publicly on TrafficalClient)
+  applyOverrides?(overrides: Record<string, ParameterValue>): void;
+  clearOverrides?(): void;
+  getOverrides?(): Record<string, ParameterValue>;
 }
 
 /**

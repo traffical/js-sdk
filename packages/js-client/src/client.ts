@@ -202,6 +202,7 @@ export class TrafficalClient {
    */
   private readonly _cumulativeAttribution: Map<string, Map<string, TrackAttribution>> = new Map();
   private _identityListeners: Array<(unitKey: string) => void> = [];
+  private _overrides: Record<string, ParameterValue> = {};
 
   constructor(options: TrafficalClientOptions) {
     const evaluationMode = options.evaluationMode ?? "bundle";
@@ -352,8 +353,9 @@ export class TrafficalClient {
     // Run plugin onDestroy hooks
     this._plugins.runDestroy();
 
-    // Clear identity listeners
+    // Clear identity listeners and overrides
     this._identityListeners = [];
+    this._overrides = {};
 
     // Remove from global instance list
     if (typeof window !== "undefined") {
@@ -410,6 +412,7 @@ export class TrafficalClient {
             }
           }
           this._plugins.runResolve(result as T);
+          this._applyOverridesToResult(result);
           return result as T;
         }
 
@@ -419,6 +422,9 @@ export class TrafficalClient {
 
         // Run plugin onResolve hooks (e.g., DOM binding plugin)
         this._plugins.runResolve(params);
+
+        // Apply parameter overrides (post-resolution, post-plugin)
+        this._applyOverridesToResult(params);
 
         return params;
       },
@@ -450,6 +456,7 @@ export class TrafficalClient {
           this._cacheDecision(decision);
           this._updateCumulativeAttribution(decision);
           this._plugins.runDecision(decision);
+          this._applyOverridesToResult(decision.assignments);
           this._emitAssignmentLogEntries(decision);
           return decision;
         }
@@ -471,6 +478,9 @@ export class TrafficalClient {
 
         // Run plugin onDecision hooks (e.g., DOM binding plugin)
         this._plugins.runDecision(decision);
+
+        // Apply parameter overrides (post-resolution, post-plugin)
+        this._applyOverridesToResult(decision.assignments);
 
         this._emitAssignmentLogEntries(decision);
 
@@ -713,6 +723,34 @@ export class TrafficalClient {
   }
 
   // ===========================================================================
+  // Parameter Overrides (Plugin API — not intended for direct public use)
+  // ===========================================================================
+
+  /**
+   * Set parameter overrides. Only keys present in a decision's assignments
+   * or getParams defaults will be overridden. Merges with existing overrides.
+   *
+   * Exposed via `PluginClientAPI` for debug tooling — not a public API.
+   */
+  applyOverrides(overrides: Record<string, ParameterValue>): void {
+    Object.assign(this._overrides, overrides);
+  }
+
+  /**
+   * Clear all parameter overrides.
+   */
+  clearOverrides(): void {
+    this._overrides = {};
+  }
+
+  /**
+   * Get a copy of the current overrides map.
+   */
+  getOverrides(): Record<string, ParameterValue> {
+    return { ...this._overrides };
+  }
+
+  // ===========================================================================
   // Private Methods
   // ===========================================================================
 
@@ -746,6 +784,16 @@ export class TrafficalClient {
         sdkVersion: SDK_VERSION,
         properties: decision.metadata.filteredContext,
       });
+    }
+  }
+
+  private _applyOverridesToResult(target: Record<string, ParameterValue>): void {
+    const keys = Object.keys(this._overrides);
+    if (keys.length === 0) return;
+    for (const k of keys) {
+      if (k in target) {
+        target[k] = this._overrides[k];
+      }
     }
   }
 

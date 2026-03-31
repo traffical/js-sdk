@@ -67,6 +67,8 @@ export interface DebugState {
   assignments: Record<string, unknown>;
   layers: LayerResolution[];
   lastDecisionId: string | null;
+  /** Parameter overrides currently applied by the debug plugin. */
+  overrides: Record<string, unknown>;
 }
 
 export interface TrafficalDebugInstance {
@@ -83,6 +85,10 @@ export interface TrafficalDebugInstance {
   onEvent(cb: (event: DebugEvent) => void): () => void;
   getConfigBundle(): ConfigBundle | null;
   setUnitKey(key: string): void;
+  setOverride(key: string, value: unknown): void;
+  clearOverride(key: string): void;
+  clearAllOverrides(): void;
+  getOverrides(): Record<string, unknown>;
   reDecide(): void;
   refresh(): Promise<void>;
 }
@@ -195,6 +201,7 @@ export function createDebugPlugin(
       assignments: { ..._assignments },
       layers: [..._layers],
       lastDecisionId: _lastDecisionId,
+      overrides: _client?.getOverrides?.() ?? {},
     };
   }
 
@@ -225,6 +232,16 @@ export function createDebugPlugin(
         cb(event);
       } catch {
         // Ignore
+      }
+    }
+  }
+
+  function triggerReDecide(): void {
+    if (_client) {
+      try {
+        _client.decide({ context: {}, defaults: {} });
+      } catch {
+        // Best-effort
       }
     }
   }
@@ -275,15 +292,37 @@ export function createDebugPlugin(
       notifyStateListeners();
     },
 
-    reDecide(): void {
-      // Trigger a new decision with empty defaults to refresh state
-      if (_client) {
-        try {
-          _client.decide({ context: {}, defaults: {} });
-        } catch {
-          // Best-effort
-        }
+    setOverride(key: string, value: unknown): void {
+      if (_client?.applyOverrides) {
+        _client.applyOverrides({ [key]: value as ParameterValue });
       }
+      notifyStateListeners();
+      triggerReDecide();
+    },
+
+    clearOverride(key: string): void {
+      if (_client?.getOverrides && _client?.applyOverrides) {
+        const current = _client.getOverrides();
+        delete current[key];
+        _client.clearOverrides?.();
+        _client.applyOverrides(current);
+      }
+      notifyStateListeners();
+      triggerReDecide();
+    },
+
+    clearAllOverrides(): void {
+      _client?.clearOverrides?.();
+      notifyStateListeners();
+      triggerReDecide();
+    },
+
+    getOverrides(): Record<string, unknown> {
+      return _client?.getOverrides?.() ?? {};
+    },
+
+    reDecide(): void {
+      triggerReDecide();
     },
 
     async refresh(): Promise<void> {

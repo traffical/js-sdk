@@ -12,6 +12,10 @@
 # Environment variables (required in CI):
 # - CLOUDFLARE_API_TOKEN: API token with R2 write permissions
 # - CLOUDFLARE_ACCOUNT_ID: Your Cloudflare account ID
+#
+# Optional:
+# - CLOUDFLARE_ZONE_ID: Zone ID for cdn.traffical.io (enables cache purging)
+#   Defaults to the traffical.io zone if not set.
 
 set -e
 
@@ -39,11 +43,9 @@ if [ -n "$CI" ]; then
   fi
 fi
 
-# Build the SDK (skip if already built, e.g., in CI)
-if [ ! -f "dist/traffical.min.js" ]; then
-  echo "Building..."
-  bun run build
-fi
+# Always rebuild to ensure the artifact matches the current package.json version
+echo "Building..."
+bun run build
 
 # Check if build succeeded
 if [ ! -f "dist/traffical.min.js" ]; then
@@ -91,6 +93,31 @@ bunx wrangler r2 object put "traffical-cdn/js-client/latest/traffical.min.js.map
   --file dist/traffical.min.js.map \
   --content-type "application/json" \
   --cache-control "public, max-age=300" --remote
+
+# Purge Cloudflare edge cache so updated objects are served immediately
+CDN_ZONE_ID="${CLOUDFLARE_ZONE_ID:-1385a95c8cb15db16a4432dc19e2a42d}"
+if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+  echo "Purging CDN cache..."
+  PURGE_RESPONSE=$(curl -s -X POST \
+    "https://api.cloudflare.com/client/v4/zones/$CDN_ZONE_ID/purge_cache" \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data "{\"files\":[
+      \"https://cdn.traffical.io/js-client/v$VERSION/traffical.min.js\",
+      \"https://cdn.traffical.io/js-client/v$VERSION/traffical.min.js.map\",
+      \"https://cdn.traffical.io/js-client/v$MAJOR/traffical.min.js\",
+      \"https://cdn.traffical.io/js-client/v$MAJOR/traffical.min.js.map\",
+      \"https://cdn.traffical.io/js-client/latest/traffical.min.js\",
+      \"https://cdn.traffical.io/js-client/latest/traffical.min.js.map\"
+    ]}")
+  if echo "$PURGE_RESPONSE" | grep -q '"success":true'; then
+    echo "✓ Cache purged"
+  else
+    echo "⚠ Cache purge failed: $PURGE_RESPONSE"
+  fi
+else
+  echo "⚠ Skipping cache purge (CLOUDFLARE_API_TOKEN not set)"
+fi
 
 echo ""
 echo "✓ Released v$VERSION to CDN"

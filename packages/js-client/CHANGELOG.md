@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.10.0
+
+### Minor Changes
+
+- 5ddb821: Add onOverridesChange() listener to TrafficalClient for reactive parameter overrides. Framework providers (React, Svelte, React Native) now automatically re-evaluate params/decisions when overrides change via DevTools debug plugin.
+
 ## 0.9.2
 
 ### Patch Changes

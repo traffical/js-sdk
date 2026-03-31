@@ -31,6 +31,7 @@ export function TrafficalRNProvider({
   const [error, setError] = useState<Error | null>(null);
   const [resolveVersion, setResolveVersion] = useState(0);
   const [overrideUnitKey, setOverrideUnitKey] = useState<string | null>(null);
+  const [overrideVersion, setOverrideVersion] = useState(0);
 
   const clientRef = useRef<TrafficalRNClient | null>(null);
   const prevUnitKeyRef = useRef<string | null>(null);
@@ -40,6 +41,14 @@ export function TrafficalRNProvider({
     if (!client) return;
     return client.onIdentityChange((newKey) => {
       setOverrideUnitKey(newKey);
+    });
+  }, [client]);
+
+  // Subscribe to override changes from applyOverrides() / clearOverrides()
+  useEffect(() => {
+    if (!client) return;
+    return client.onOverridesChange(() => {
+      setOverrideVersion((v) => v + 1);
     });
   }, [client]);
 
@@ -167,6 +176,7 @@ export function TrafficalRNProvider({
       getUnitKey,
       getContext,
       resolveVersion,
+      overrideVersion,
       initialParams: config.initialParams,
       localConfig: config.localConfig,
     }),
@@ -177,6 +187,7 @@ export function TrafficalRNProvider({
       getUnitKey,
       getContext,
       resolveVersion,
+      overrideVersion,
       config.initialParams,
       config.localConfig,
     ]

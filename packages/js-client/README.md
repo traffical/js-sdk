@@ -133,6 +133,31 @@ traffical.identify(crypto.randomUUID());
 
 Unlike `setStableId()` (which silently changes the internal ID), `identify()` notifies all subscribers — framework providers re-render, the debug plugin updates, and DevTools reflects the change.
 
+## Parameter Overrides (Plugin API)
+
+The client supports runtime parameter overrides intended for debugging and DevTools integration. These methods are available on the client instance but are designed for plugin use (not general application code):
+
+```typescript
+// Apply overrides — only affects keys present in decide()/getParams() defaults
+client.applyOverrides({ 'feature.enabled': true, 'feature.color': 'red' });
+
+// Get current overrides
+client.getOverrides(); // { 'feature.enabled': true, 'feature.color': 'red' }
+
+// Clear all overrides
+client.clearOverrides();
+
+// Listen for override changes (used by framework providers for reactivity)
+const unsub = client.onOverridesChange((overrides) => {
+  console.log('Overrides changed:', overrides);
+});
+unsub(); // unsubscribe
+```
+
+Overrides are applied **post-resolution** in `decide()` and `getParams()`. They only affect keys that exist in the `defaults` object passed to those methods. Framework providers (React, Svelte, React Native) automatically re-evaluate when overrides change.
+
+The Traffical DevTools debug plugin uses these methods to let developers force parameter values during development and QA.
+
 ## Features
 
 - **Error Boundary** - SDK errors never crash your app

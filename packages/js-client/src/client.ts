@@ -202,6 +202,7 @@ export class TrafficalClient {
    */
   private readonly _cumulativeAttribution: Map<string, Map<string, TrackAttribution>> = new Map();
   private _identityListeners: Array<(unitKey: string) => void> = [];
+  private _overrideListeners: Array<(overrides: Record<string, ParameterValue>) => void> = [];
   private _overrides: Record<string, ParameterValue> = {};
 
   constructor(options: TrafficalClientOptions) {
@@ -353,8 +354,9 @@ export class TrafficalClient {
     // Run plugin onDestroy hooks
     this._plugins.runDestroy();
 
-    // Clear identity listeners and overrides
+    // Clear listeners and overrides
     this._identityListeners = [];
+    this._overrideListeners = [];
     this._overrides = {};
 
     // Remove from global instance list
@@ -722,6 +724,18 @@ export class TrafficalClient {
     };
   }
 
+  /**
+   * Subscribe to override changes triggered by `applyOverrides()` / `clearOverrides()`.
+   * Framework providers use this to re-evaluate decisions when overrides change.
+   * Returns an unsubscribe function.
+   */
+  onOverridesChange(cb: (overrides: Record<string, ParameterValue>) => void): () => void {
+    this._overrideListeners.push(cb);
+    return () => {
+      this._overrideListeners = this._overrideListeners.filter(l => l !== cb);
+    };
+  }
+
   // ===========================================================================
   // Parameter Overrides (Plugin API — not intended for direct public use)
   // ===========================================================================
@@ -734,6 +748,7 @@ export class TrafficalClient {
    */
   applyOverrides(overrides: Record<string, ParameterValue>): void {
     Object.assign(this._overrides, overrides);
+    this._notifyOverrideListeners();
   }
 
   /**
@@ -741,6 +756,7 @@ export class TrafficalClient {
    */
   clearOverrides(): void {
     this._overrides = {};
+    this._notifyOverrideListeners();
   }
 
   /**
@@ -753,6 +769,17 @@ export class TrafficalClient {
   // ===========================================================================
   // Private Methods
   // ===========================================================================
+
+  private _notifyOverrideListeners(): void {
+    const snapshot = { ...this._overrides };
+    for (const cb of this._overrideListeners) {
+      try {
+        cb(snapshot);
+      } catch {
+        // Ignore listener errors
+      }
+    }
+  }
 
   private _emitAssignmentLogEntries(decision: DecisionResult): void {
     if (!this._assignmentLogger) return;

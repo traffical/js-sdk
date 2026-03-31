@@ -120,6 +120,8 @@ export interface TrafficalContextValue {
   initialParams?: Record<string, unknown>;
   /** Local config bundle for synchronous resolution during initial render */
   localConfig?: ConfigBundle;
+  /** Bumped when parameter overrides change (via DevTools / debug plugin) */
+  overrideVersion: number;
 }
 
 /**

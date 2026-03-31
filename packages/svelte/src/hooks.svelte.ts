@@ -104,7 +104,18 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
   // Derive params reactively using $derived.by
   // This is synchronous and provides fine-grained reactivity
   const params = $derived.by((): T => {
-    // Priority 1: Resolve from bundle if available
+    // Track override version so Svelte re-evaluates when overrides change
+    const _v = ctx.overrideVersion;
+
+    // Priority 1: Route through client.getParams() when available (applies overrides)
+    if (ctx.client && ctx.bundle) {
+      return ctx.client.getParams({
+        context: { ...ctx.getContext(), ...options.context },
+        defaults: options.defaults,
+      }) as T;
+    }
+
+    // Priority 2: Resolve from bundle directly (SSR / no client)
     if (ctx.bundle) {
       const context: Context = {
         ...ctx.getContext(),
@@ -113,17 +124,20 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       return resolveParameters(ctx.bundle, context, options.defaults);
     }
 
-    // Priority 2: Use server-provided initial params
+    // Priority 3: Use server-provided initial params
     if (ctx.initialParams) {
       return { ...options.defaults, ...ctx.initialParams } as T;
     }
 
-    // Priority 3: Fall back to defaults
+    // Priority 4: Fall back to defaults
     return options.defaults;
   });
 
   // Derive decision reactively
   const decision = $derived.by((): DecisionResult | null => {
+    // Track override version so Svelte re-evaluates when overrides change
+    const _v = ctx.overrideVersion;
+
     if (!shouldTrackDecision) {
       return null;
     }

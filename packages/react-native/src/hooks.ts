@@ -71,6 +71,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
     getContext,
     getUnitKey,
     resolveVersion,
+    overrideVersion,
     initialParams,
     localConfig,
   } = useTrafficalContext();
@@ -177,6 +178,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
     stableDefaults,
     shouldTrackDecision,
     resolveVersion,
+    overrideVersion,
   ]);
 
   useEffect(() => {

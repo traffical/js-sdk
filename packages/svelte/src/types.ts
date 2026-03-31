@@ -146,6 +146,8 @@ export interface TrafficalContextValue {
   initializeClient: () => Promise<void>;
   /** Initial params from SSR for hydration */
   initialParams?: Record<string, unknown>;
+  /** Bumped when parameter overrides change (via DevTools / debug plugin) */
+  readonly overrideVersion: number;
 }
 
 // =============================================================================

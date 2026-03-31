@@ -71,6 +71,7 @@ export function TrafficalProvider({
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [overrideUnitKey, setOverrideUnitKey] = useState<string | null>(null);
+  const [overrideVersion, setOverrideVersion] = useState(0);
 
   // Keep a ref to the client for cleanup
   const clientRef = useRef<TrafficalClient | null>(null);
@@ -80,6 +81,14 @@ export function TrafficalProvider({
     if (!client) return;
     return client.onIdentityChange((newKey) => {
       setOverrideUnitKey(newKey);
+    });
+  }, [client]);
+
+  // Subscribe to override changes from client.applyOverrides() / clearOverrides()
+  useEffect(() => {
+    if (!client) return;
+    return client.onOverridesChange(() => {
+      setOverrideVersion((v) => v + 1);
     });
   }, [client]);
 
@@ -193,8 +202,9 @@ export function TrafficalProvider({
       getContext,
       initialParams: config.initialParams,
       localConfig: config.localConfig,
+      overrideVersion,
     }),
-    [client, ready, error, getUnitKey, getContext, config.initialParams, config.localConfig]
+    [client, ready, error, getUnitKey, getContext, config.initialParams, config.localConfig, overrideVersion]
   );
 
   return (

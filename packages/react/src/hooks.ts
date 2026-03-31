@@ -174,7 +174,7 @@ export interface UseTrafficalResult<T> {
 export function useTraffical<T extends Record<string, ParameterValue>>(
   options: UseTrafficalOptions<T>
 ): UseTrafficalResult<T> {
-  const { client, ready, error, getContext, getUnitKey, initialParams, localConfig } =
+  const { client, ready, error, getContext, getUnitKey, initialParams, localConfig, overrideVersion } =
     useTrafficalContext();
 
   const trackingMode = options.tracking ?? "full";
@@ -313,7 +313,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       setParams(resolved as T);
       setDecision(null);
     }
-  }, [client, ready, getContext, stableContext, stableDefaults, shouldTrackDecision]);
+  }, [client, ready, getContext, stableContext, stableDefaults, shouldTrackDecision, overrideVersion]);
 
   // Auto-track exposure when tracking is "full"
   useEffect(() => {

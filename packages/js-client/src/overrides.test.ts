@@ -238,6 +238,93 @@ describe("TrafficalClient parameter overrides", () => {
 });
 
 // =========================================================================
+// onOverridesChange listener
+// =========================================================================
+
+describe("onOverridesChange listener", () => {
+  test("fires on applyOverrides", () => {
+    const client = createClient();
+    const calls: Record<string, unknown>[] = [];
+    client.onOverridesChange((overrides) => calls.push(overrides));
+
+    client.applyOverrides({ "feature.enabled": true });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({ "feature.enabled": true });
+    client.destroy();
+  });
+
+  test("fires on clearOverrides", () => {
+    const client = createClient();
+    const calls: Record<string, unknown>[] = [];
+
+    client.applyOverrides({ "feature.enabled": true });
+    client.onOverridesChange((overrides) => calls.push(overrides));
+
+    client.clearOverrides();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({});
+    client.destroy();
+  });
+
+  test("returns unsubscribe function", () => {
+    const client = createClient();
+    const calls: Record<string, unknown>[] = [];
+    const unsub = client.onOverridesChange((overrides) => calls.push(overrides));
+
+    client.applyOverrides({ "feature.enabled": true });
+    expect(calls).toHaveLength(1);
+
+    unsub();
+    client.applyOverrides({ "feature.color": "red" });
+    expect(calls).toHaveLength(1); // no new call
+
+    client.destroy();
+  });
+
+  test("destroy() clears listeners", () => {
+    const client = createClient();
+    const calls: Record<string, unknown>[] = [];
+    client.onOverridesChange((overrides) => calls.push(overrides));
+
+    client.destroy();
+    client.applyOverrides({ "feature.enabled": true });
+
+    expect(calls).toHaveLength(0);
+  });
+
+  test("listener errors don't break other listeners", () => {
+    const client = createClient();
+    const calls: Record<string, unknown>[] = [];
+
+    client.onOverridesChange(() => {
+      throw new Error("boom");
+    });
+    client.onOverridesChange((overrides) => calls.push(overrides));
+
+    client.applyOverrides({ "feature.enabled": true });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({ "feature.enabled": true });
+    client.destroy();
+  });
+
+  test("listener receives a snapshot (not live reference)", () => {
+    const client = createClient();
+    const calls: Record<string, unknown>[] = [];
+    client.onOverridesChange((overrides) => calls.push(overrides));
+
+    client.applyOverrides({ "feature.enabled": true });
+    client.applyOverrides({ "feature.color": "red" });
+
+    expect(calls[0]).toEqual({ "feature.enabled": true });
+    expect(calls[1]).toEqual({ "feature.enabled": true, "feature.color": "red" });
+    client.destroy();
+  });
+});
+
+// =========================================================================
 // Debug plugin delegation (Option D)
 // =========================================================================
 

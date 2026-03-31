@@ -42,6 +42,8 @@ export interface TrafficalContextValue {
   getContext: () => Context;
   /** Incremented after a server-mode re-resolve (e.g. identity change). */
   resolveVersion: number;
+  /** Bumped when parameter overrides change (via DevTools / debug plugin) */
+  overrideVersion: number;
   initialParams?: Record<string, unknown>;
   localConfig?: ConfigBundle;
 }

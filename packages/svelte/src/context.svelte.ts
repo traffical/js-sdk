@@ -53,6 +53,7 @@ function createTrafficalContextState(
   let error = $state<Error | null>(null);
   let bundle = $state(config.initialBundle ?? null);
   let overrideUnitKey = $state<string | null>(null);
+  let overrideVersion = $state(0);
 
   // Initialize client only in browser
   // NOTE: We create the client but DO NOT call initialize() here.
@@ -89,7 +90,12 @@ function createTrafficalContextState(
     clientInstance.onIdentityChange((newKey: string) => {
       overrideUnitKey = newKey;
     });
-    
+
+    // Subscribe to override changes from applyOverrides() / clearOverrides()
+    clientInstance.onOverridesChange(() => {
+      overrideVersion++;
+    });
+
     // If we have initial bundle, mark as ready immediately (no fetch needed for initial render)
     if (config.initialBundle) {
       ready = true;
@@ -173,6 +179,9 @@ function createTrafficalContextState(
     getContext,
     initializeClient,
     initialParams: config.initialParams,
+    get overrideVersion() {
+      return overrideVersion;
+    },
   };
 }
 

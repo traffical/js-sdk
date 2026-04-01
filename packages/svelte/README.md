@@ -4,7 +4,7 @@ Traffical SDK for Svelte 5 applications. Provides reactive hooks and components 
 
 ## Features
 
-- **Svelte 5 Runes** - Uses `$state`, `$derived`, and `$effect` for reactive, fine-grained updates
+- **Svelte 5 Runes** - Uses `$state` and `$effect` for reactive, fine-grained updates
 - **Full SSR Support** - Pre-fetch config bundles in SvelteKit load functions
 - **Hydration-Safe** - No FOOC (Flash of Original Content) with proper initialization
 - **Feature Parity** - Same capabilities as the React SDK
@@ -55,7 +55,9 @@ In your root layout, initialize Traffical:
 <script lang="ts">
   import { useTraffical } from '@traffical/svelte';
 
-  const { params, ready, track } = useTraffical({
+  // `params` is a deep reactive proxy — destructuring it is safe.
+  // For `ready`/`decision`, access through the object (see Reactivity section).
+  const { params, track } = useTraffical({
     defaults: {
       'checkout.ctaText': 'Buy Now',
       'checkout.ctaColor': '#000000',
@@ -63,21 +65,16 @@ In your root layout, initialize Traffical:
   });
 
   function handlePurchase(amount: number) {
-    // track has the decisionId already bound!
     track('purchase', { value: amount, orderId: 'ord_123' });
   }
 </script>
 
-{#if ready}
-  <button
-    style="background: {params['checkout.ctaColor']}"
-    onclick={() => handlePurchase(99.99)}
-  >
-    {params['checkout.ctaText']}
-  </button>
-{:else}
-  <button disabled>Loading...</button>
-{/if}
+<button
+  style="background: {params['checkout.ctaColor']}"
+  onclick={() => handlePurchase(99.99)}
+>
+  {params['checkout.ctaText']}
+</button>
 ```
 
 ## SSR with SvelteKit
@@ -234,6 +231,52 @@ export async function load({ fetch, cookies }) {
 }
 ```
 
+## Reactivity & Destructuring
+
+`useTraffical()` returns an object with a mix of reactive properties. Understanding what's safe to destructure avoids subtle bugs:
+
+| Property | Type | Destructure? | Why |
+|----------|------|-------------|-----|
+| `params` | Deep `$state` proxy (object) | **Yes** | Property reads like `params['x']` stay reactive |
+| `decision` | Getter → `$state` | No — use `t.decision` | Destructuring captures a snapshot |
+| `ready` | Getter → `$state` | No — use `t.ready` | Destructuring captures a snapshot |
+| `error` | Getter → `$state` | No — use `t.error` | Destructuring captures a snapshot |
+| `track`, `trackExposure` | Function | **Yes** | Plain functions, no reactivity needed |
+
+### Recommended patterns
+
+```svelte
+<script lang="ts">
+  import { useTraffical } from '@traffical/svelte';
+
+  // ✅ Destructure params and functions — they're safe
+  const { params, track } = useTraffical({
+    defaults: { 'hero.title': 'Welcome' },
+  });
+
+  // ✅ Access reactive primitives through the object
+  const t = useTraffical({
+    defaults: { 'hero.title': 'Welcome' },
+  });
+</script>
+
+<!-- ✅ Destructured params — reactive -->
+<h1>{params['hero.title']}</h1>
+
+<!-- ✅ Reactive primitive via object -->
+{#if t.ready}
+  <p>Decision: {t.decision?.decisionId}</p>
+{/if}
+```
+
+```svelte
+<script lang="ts">
+  // ❌ Don't destructure reactive primitives
+  const { ready } = useTraffical({ defaults: { 'x': 1 } });
+  // `ready` is now a frozen boolean snapshot — it won't update!
+</script>
+```
+
 ## API Reference
 
 ### Provider
@@ -272,11 +315,17 @@ Function-based alternative to the Provider component.
 Primary hook for parameter resolution and decision tracking.
 
 ```typescript
-const { params, ready, decision, error, trackExposure, track } = useTraffical({
+// Destructure params + functions (safe):
+const { params, track, trackExposure } = useTraffical({
   defaults: { 'feature.name': 'default-value' },
   context: { customField: 'value' }, // Optional
   tracking: 'full', // 'full' | 'decision' | 'none'
 });
+
+// Access decision/ready/error through the object (safe):
+const t = useTraffical({ defaults: { 'feature.name': 'default-value' } });
+t.ready;    // reactive ✅
+t.decision; // reactive ✅
 ```
 
 **Tracking Modes:**
@@ -285,10 +334,10 @@ const { params, ready, decision, error, trackExposure, track } = useTraffical({
 - `'none'` - No tracking (for SSR, tests, or internal logic)
 
 **Return Value:**
-- `params` - Resolved parameter values (reactive)
-- `decision` - Decision metadata (null when `tracking="none"`)
-- `ready` - Whether the client is ready
-- `error` - Any initialization error
+- `params` - Resolved parameter values (deep reactive proxy — safe to destructure)
+- `decision` - Decision metadata, access via `t.decision` (null when `tracking="none"`)
+- `ready` - Whether the client is ready, access via `t.ready`
+- `error` - Any initialization error, access via `t.error`
 - `trackExposure` - Manually track exposure (no-op when `tracking="none"`)
 - `track` - Track event with bound decisionId (no-op when `tracking="none"`)
 
@@ -299,7 +348,7 @@ Returns a function to track user events.
 > **Tip:** For most use cases, use the bound `track` from `useTraffical()` instead. It automatically includes the `decisionId`. Use this standalone hook for advanced scenarios like cross-component event tracking.
 
 ```typescript
-// Recommended: use bound track from useTraffical
+// Recommended: use bound track from useTraffical (safe to destructure)
 const { params, track } = useTraffical({
   defaults: { 'checkout.ctaText': 'Buy Now' },
 });
@@ -490,7 +539,7 @@ const { params } = useTraffical<CheckoutParams>({
 | Standalone track hook | `useTrafficalTrack()` | `useTrafficalTrack()` |
 | Client access | `useTrafficalClient()` | `useTrafficalClient()` |
 | Plugin access | `useTrafficalPlugin()` | `useTrafficalPlugin()` |
-| Reactivity | `useState`/`useEffect` | `$state`/`$derived` |
+| Reactivity | `useState`/`useEffect` | `$state`/`$effect` |
 | SSR | `initialParams` prop | `loadTrafficalBundle()` helper |
 
 ## License

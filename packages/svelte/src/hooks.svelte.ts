@@ -2,7 +2,18 @@
  * @traffical/svelte - Hooks
  *
  * Svelte 5 hooks for parameter resolution and decision tracking.
- * Uses runes ($derived, $effect) for reactive, fine-grained updates.
+ * Uses $state with event-driven recomputation for cross-package reactivity.
+ *
+ * IMPORTANT — Reactivity & Destructuring:
+ * `params` is returned as a deep $state proxy. Destructuring it is safe:
+ *   const { params } = useTraffical({ defaults: { ... } });
+ *   {params['my.key']}  // reactive ✅
+ *
+ * `decision`, `ready`, `error` are primitives/objects behind getters.
+ * Access them through the returned object for reactivity:
+ *   const t = useTraffical({ defaults: { ... } });
+ *   {t.ready}      // reactive ✅
+ *   {t.decision}   // reactive ✅
  */
 
 import { resolveParameters, decide as coreDecide } from "@traffical/core";
@@ -48,40 +59,38 @@ function isBrowser(): boolean {
  * <script>
  *   import { useTraffical } from '@traffical/svelte';
  *
- *   // Full tracking (default) - decision + exposure events
- *   const { params, decision, ready } = useTraffical({
+ *   // Destructuring `params` is safe — it's a deep reactive proxy.
+ *   // For `ready`/`decision`, access via the object for reactivity.
+ *   const { params, trackExposure } = useTraffical({
  *     defaults: { "checkout.ctaText": "Buy Now" },
  *   });
  * </script>
  *
- * {#if ready}
- *   <button>{params['checkout.ctaText']}</button>
- * {:else}
- *   <button disabled>Loading...</button>
+ * <button>{params['checkout.ctaText']}</button>
+ * ```
+ *
+ * @example
+ * ```svelte
+ * <script>
+ *   // Access decision/ready through the object (not destructured)
+ *   const t = useTraffical({
+ *     defaults: { "checkout.ctaText": "Buy Now" },
+ *     tracking: "decision",
+ *   });
+ * </script>
+ *
+ * {#if t.ready}
+ *   <button onclick={() => t.trackExposure()}>
+ *     {t.params['checkout.ctaText']}
+ *   </button>
  * {/if}
  * ```
  *
  * @example
  * ```svelte
  * <script>
- *   // Decision tracking only - manual exposure control
- *   const { params, decision, trackExposure } = useTraffical({
- *     defaults: { "checkout.ctaText": "Buy Now" },
- *     tracking: "decision",
- *   });
- *
- *   // Track exposure when element becomes visible
- *   function handleVisible() {
- *     trackExposure();
- *   }
- * </script>
- * ```
- *
- * @example
- * ```svelte
- * <script>
  *   // No tracking - for SSR, tests, or internal logic
- *   const { params, ready } = useTraffical({
+ *   const { params } = useTraffical({
  *     defaults: { "ui.hero.title": "Welcome" },
  *     tracking: "none",
  *   });
@@ -101,13 +110,21 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
   let hasTrackedExposure = $state(false);
   let currentDecisionId = $state<string | null>(null);
 
-  // Derive params reactively using $derived.by
-  // This is synchronous and provides fine-grained reactivity
-  const params = $derived.by((): T => {
-    // Track override version so Svelte re-evaluates when overrides change
-    void ctx.overrideVersion;
+  // -------------------------------------------------------------------------
+  // Params as deep $state proxy + Decision as $state
+  //
+  // We avoid $derived.by because when @traffical/svelte is consumed as a
+  // linked or pre-bundled package, the Svelte runtime used by this file may
+  // differ from the app's runtime, breaking dependency tracking.
+  //
+  // `params` is stored inside a deep $state proxy object. This means
+  // destructuring is safe: `const { params } = useTraffical(...)` gives
+  // the consumer a reference to the proxy, and property reads like
+  // `params['feature.x']` are reactive. On recompute, we mutate the
+  // proxy in-place via Object.assign rather than replacing it.
+  // -------------------------------------------------------------------------
 
-    // Priority 1: Route through client.getParams() when available (applies overrides)
+  function computeParams(): T {
     if (ctx.client && ctx.bundle) {
       return ctx.client.getParams({
         context: { ...ctx.getContext(), ...options.context },
@@ -115,7 +132,6 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       }) as T;
     }
 
-    // Priority 2: Resolve from bundle directly (SSR / no client)
     if (ctx.bundle) {
       const context: Context = {
         ...ctx.getContext(),
@@ -124,53 +140,60 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       return resolveParameters(ctx.bundle, context, options.defaults);
     }
 
-    // Priority 3: Use server-provided initial params
     if (ctx.initialParams) {
       return { ...options.defaults, ...ctx.initialParams } as T;
     }
 
-    // Priority 4: Fall back to defaults
     return options.defaults;
-  });
+  }
 
-  // Derive decision reactively
-  const decision = $derived.by((): DecisionResult | null => {
-    // Track override version so Svelte re-evaluates when overrides change
-    void ctx.overrideVersion;
-
-    if (!shouldTrackDecision) {
-      return null;
-    }
-
-    if (!ctx.bundle) {
-      return null;
-    }
+  function computeDecision(): DecisionResult | null {
+    if (!shouldTrackDecision) return null;
+    if (!ctx.bundle) return null;
 
     const context: Context = {
       ...ctx.getContext(),
       ...options.context,
     };
 
-    // Use client's decide if available (handles tracking internally)
     if (ctx.client) {
-      return ctx.client.decide({
-        context,
-        defaults: options.defaults,
-      });
+      return ctx.client.decide({ context, defaults: options.defaults });
     }
 
-    // Fall back to core decide (SSR or no client)
     return coreDecide(ctx.bundle, context, options.defaults);
-  });
+  }
 
-  // Reset exposure tracking when decision changes
-  $effect(() => {
-    const decisionId = decision?.decisionId ?? null;
-    if (decisionId !== currentDecisionId) {
-      currentDecisionId = decisionId;
+  // Deep $state proxy — params is a stable object reference that can be
+  // destructured safely. Property mutations propagate to the template.
+  const _paramsProxy = $state<{ current: T }>({ current: computeParams() });
+  let decision = $state<DecisionResult | null>(computeDecision());
+
+  function recompute() {
+    // Mutate the proxy's properties in-place so destructured references
+    // stay alive. Keys come from `defaults` and are constant per call site.
+    const newParams = computeParams();
+    const target = _paramsProxy.current as Record<string, ParameterValue>;
+    for (const key of Object.keys(target)) {
+      if (!(key in newParams)) {
+        delete target[key];
+      }
+    }
+    Object.assign(target, newParams);
+
+    const newDecision = computeDecision();
+    const newId = newDecision?.decisionId ?? null;
+    if (newId !== currentDecisionId) {
+      currentDecisionId = newId;
       hasTrackedExposure = false;
     }
-  });
+    decision = newDecision;
+  }
+
+  // Subscribe to override and identity changes from the client
+  if (ctx.client) {
+    ctx.client.onOverridesChange(() => recompute());
+    ctx.client.onIdentityChange(() => recompute());
+  }
 
   // Auto-track exposure when tracking is "full" and decision is available
   $effect(() => {
@@ -255,7 +278,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
 
   return {
     get params() {
-      return params;
+      return _paramsProxy.current;
     },
     get decision() {
       return decision;
@@ -328,7 +351,7 @@ export function useTrafficalTrack(): (options: TrackEventOptions) => void {
  * <script>
  *   import { useTraffical, useTrafficalReward } from '@traffical/svelte';
  *
- *   const { params, decision } = useTraffical({
+ *   const t = useTraffical({
  *     defaults: { 'checkout.ctaText': 'Buy Now' },
  *   });
  *
@@ -338,6 +361,7 @@ export function useTrafficalTrack(): (options: TrackEventOptions) => void {
  *     trackReward({
  *       reward: amount,
  *       rewardType: 'revenue',
+ *       decisionId: t.decision?.decisionId,
  *     });
  *   }
  * </script>
@@ -423,6 +447,7 @@ export function useTrafficalClient(): {
 
 /**
  * Hook to access a registered plugin by name.
+ * Plugins are registered at initialization and don't change at runtime.
  *
  * @example
  * ```svelte
@@ -431,13 +456,7 @@ export function useTrafficalClient(): {
  *   import type { DOMBindingPlugin } from '@traffical/js-client';
  *
  *   const domPlugin = useTrafficalPlugin<DOMBindingPlugin>('dom-binding');
- *
- *   // Re-apply bindings after dynamic content changes
- *   $effect(() => {
- *     if (contentLoaded) {
- *       domPlugin?.applyBindings();
- *     }
- *   });
+ *   domPlugin?.applyBindings();
  * </script>
  * ```
  */
@@ -446,14 +465,9 @@ export function useTrafficalPlugin<
 >(name: string): T | undefined {
   const ctx = getTrafficalContext();
 
-  // Derive plugin access reactively
-  const plugin = $derived.by((): T | undefined => {
-    if (!ctx.client || !ctx.ready) {
-      return undefined;
-    }
-    return ctx.client.getPlugin(name) as T | undefined;
-  });
-
-  return plugin;
+  if (!ctx.client || !ctx.ready) {
+    return undefined;
+  }
+  return ctx.client.getPlugin(name) as T | undefined;
 }
 

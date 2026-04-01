@@ -198,18 +198,29 @@ export interface BoundTrackRewardOptions {
 
 /**
  * Return value from the useTraffical hook.
- * All properties are reactive via Svelte 5 runes.
+ *
+ * **Destructuring guide:**
+ * - `params` — safe to destructure. It's a deep reactive proxy; property
+ *   reads like `params['my.key']` remain reactive after destructuring.
+ * - `decision`, `ready`, `error` — access via the returned object
+ *   (e.g. `t.ready`) for reactivity. Destructuring these captures a
+ *   snapshot and won't update.
+ * - `trackExposure`, `track`, `trackReward` — plain functions, safe to
+ *   destructure.
  */
 export interface UseTrafficalResult<
   T extends Record<string, ParameterValue> = Record<string, ParameterValue>,
 > {
-  /** Resolved parameter values (reactive) */
+  /**
+   * Resolved parameter values (deep reactive proxy).
+   * Safe to destructure: `const { params } = useTraffical(...)`.
+   */
   readonly params: T;
-  /** The full decision result (null when tracking="none") */
+  /** The full decision result (null when tracking="none"). Access via `t.decision` for reactivity. */
   readonly decision: DecisionResult | null;
-  /** Whether the client is ready (config loaded) */
+  /** Whether the client is ready. Access via `t.ready` for reactivity. */
   readonly ready: boolean;
-  /** Any error that occurred */
+  /** Any error that occurred. Access via `t.error` for reactivity. */
   readonly error: Error | null;
   /** Function to manually track exposure (no-op when tracking="none") */
   trackExposure: () => void;

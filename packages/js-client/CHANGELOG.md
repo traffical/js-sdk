@@ -1,5 +1,11 @@
 # @traffical/js-client
 
+## 0.10.1
+
+### Patch Changes
+
+- 5e44fed: Make params a deep $state proxy so destructuring is safe. const { params } = useTraffical(...) now stays reactive. Fix useTrafficalPlugin to remove $derived.by warning.
+
 ## 0.10.0
 
 ### Minor Changes

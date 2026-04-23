@@ -34,7 +34,6 @@ import type {
   UseTrafficalResult,
   BoundTrackRewardOptions,
   TrackRewardOptions,
-  TrackEventOptions,
 } from "./types.js";
 
 // =============================================================================

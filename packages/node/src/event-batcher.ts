@@ -186,7 +186,7 @@ export class EventBatcher {
 
     if (this._onSchemaWarnings) {
       try {
-        const body: EventBatchResponse = await response.json();
+        const body = (await response.json()) as EventBatchResponse;
         if (body.schemaWarnings && body.schemaWarnings.length > 0) {
           this._onSchemaWarnings(body.schemaWarnings);
         }

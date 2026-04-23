@@ -113,18 +113,21 @@ describe("EventBatcher schema warnings", () => {
   test("does NOT parse response body when onSchemaWarnings is not set", async () => {
     let jsonCalled = false;
 
-    const mockResponse = new Response(
-      JSON.stringify({ accepted: 1, schemaWarnings: mockWarnings }),
-      { status: 200 }
-    );
-
-    const originalJson = mockResponse.json.bind(mockResponse);
-    mockResponse.json = () => {
-      jsonCalled = true;
-      return originalJson();
-    };
-
-    globalThis.fetch = mock(() => Promise.resolve(mockResponse)) as any;
+    globalThis.fetch = mock(() => {
+      const resp = new Response(
+        JSON.stringify({ accepted: 1, schemaWarnings: mockWarnings }),
+        { status: 200 }
+      );
+      const originalJson = resp.json.bind(resp);
+      Object.defineProperty(resp, "json", {
+        value: () => {
+          jsonCalled = true;
+          return originalJson();
+        },
+        writable: true,
+      });
+      return Promise.resolve(resp);
+    }) as any;
 
     const batcher = new EventBatcher({
       endpoint: "https://test.example.com/v1/events/batch",

@@ -467,10 +467,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * If decisionId is provided and the decision is cached, attribution is auto-populated.
    */
   trackReward(options: TrackOptions): void {
-    // Map old API to new track() API
-    this.track(options.event, options.properties, {
-      decisionId: undefined, // Not available in old API without decisionId
-    });
+    // Map old API to new track() API — cast through the untyped signature
+    (this.track as (event: string, properties?: Record<string, unknown>, options?: { decisionId?: string }) => void)(
+      options.event, options.properties, { decisionId: undefined }
+    );
   }
 
   // ===========================================================================

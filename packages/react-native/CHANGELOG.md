@@ -1,5 +1,19 @@
 # @traffical/react-native
 
+## 0.5.0
+
+### Minor Changes
+
+- f0f31bc: Add type-safe event tracking and dev-mode schema warnings
+- aebc425: Add typed event tracking with schema-aware clients. All SDK clients now accept an optional `TrafficalEvents` type parameter for compile-time validation of event names and properties in `track()` calls. Event loggers and batchers surface schema validation warnings from the edge API via a new `onSchemaWarnings` callback, enabling dev-mode visibility into tracking plan violations.
+
+### Patch Changes
+
+- Updated dependencies [f0f31bc]
+- Updated dependencies [aebc425]
+  - @traffical/core@0.6.0
+  - @traffical/js-client@0.11.0
+
 ## 0.4.7
 
 ### Patch Changes

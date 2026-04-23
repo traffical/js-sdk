@@ -60,6 +60,13 @@ export type {
   GetParamsOptions,
   DecideOptions,
   TrackOptions,
+  // Typed event tracking
+  TrackEventMap,
+  TypedTrackFn,
+  SchemaViolation,
+  EventSchemaWarning,
+  EventBatchResponse,
+  OnSchemaWarnings,
 } from "./types/index.js";
 
 // Hashing

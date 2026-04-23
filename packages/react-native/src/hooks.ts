@@ -3,6 +3,8 @@ import type {
   ParameterValue,
   DecisionResult,
   Context,
+  TrackEventMap,
+  TypedTrackFn,
 } from "@traffical/core";
 import { resolveParameters } from "@traffical/core";
 import type { TrafficalPlugin } from "@traffical/js-client";
@@ -51,19 +53,22 @@ export interface BoundTrackOptions {
   properties?: Record<string, unknown>;
 }
 
-export interface UseTrafficalResult<T> {
+export interface UseTrafficalResult<T, TEvents extends TrackEventMap = TrackEventMap> {
   params: T;
   decision: DecisionResult | null;
   ready: boolean;
   error: Error | null;
   trackExposure: () => void;
-  track: (event: string, properties?: Record<string, unknown>) => void;
+  track: TypedTrackFn<TEvents>;
   flushEvents: () => Promise<void>;
 }
 
-export function useTraffical<T extends Record<string, ParameterValue>>(
+export function useTraffical<
+  T extends Record<string, ParameterValue>,
+  TEvents extends TrackEventMap = TrackEventMap
+>(
   options: UseTrafficalOptions<T>
-): UseTrafficalResult<T> {
+): UseTrafficalResult<T, TEvents> {
   const {
     client,
     ready,
@@ -248,7 +253,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
     ready,
     error,
     trackExposure,
-    track,
+    track: track as TypedTrackFn<TEvents>,
     flushEvents,
   };
 }
@@ -257,7 +262,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
 // useTrafficalTrack
 // =============================================================================
 
-export function useTrafficalTrack() {
+export function useTrafficalTrack<TEvents extends TrackEventMap = TrackEventMap>(): TypedTrackFn<TEvents> {
   const { client, getUnitKey } = useTrafficalContext();
 
   const track = useCallback(
@@ -281,7 +286,7 @@ export function useTrafficalTrack() {
     [client, getUnitKey]
   );
 
-  return track;
+  return track as TypedTrackFn<TEvents>;
 }
 
 // =============================================================================

@@ -3,7 +3,7 @@ import {
   type TrafficalClientOptions,
   type LifecycleProvider,
 } from "@traffical/js-client";
-import type { ServerResolveResponse } from "@traffical/core";
+import type { ServerResolveResponse, TrackEventMap } from "@traffical/core";
 import {
   createPreloadedAsyncStorage,
   type PreloadedAsyncStorageProvider,
@@ -22,7 +22,7 @@ const CACHED_RESPONSE_TIMESTAMP_KEY = "server_resolve_cache_ts";
 const DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const DEFAULT_SUGGESTED_REFRESH_MS = 60_000; // 60 seconds
 
-export class TrafficalRNClient extends TrafficalClient {
+export class TrafficalRNClient<TEvents extends TrackEventMap = TrackEventMap> extends TrafficalClient<TEvents> {
   private readonly _rnStorage: PreloadedAsyncStorageProvider;
   private readonly _rnLifecycle: LifecycleProvider;
   readonly deviceInfoProvider?: DeviceInfoProvider;

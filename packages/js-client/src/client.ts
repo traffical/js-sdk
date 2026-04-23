@@ -23,6 +23,8 @@ import {
   type ServerResolveResponse,
   type ResolveOptions,
   type AssignmentLogger,
+  type TrackEventMap,
+  type OnSchemaWarnings,
   resolveParameters,
   decide as coreDecide,
   getUnitKeyValue,
@@ -141,6 +143,20 @@ export interface TrafficalClientOptions {
    * (same unit+policy+variant won't fire again). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
+
+  /**
+   * Callback for schema validation warnings from the edge.
+   * Only fires when event schemas are defined and enforcement is "warn".
+   * Recommended for development builds to surface schema violations.
+   *
+   * @example
+   * onSchemaWarnings: (warnings) => {
+   *   for (const w of warnings) {
+   *     console.warn(`[Traffical] Schema warning for "${w.event}":`, w.violations);
+   *   }
+   * }
+   */
+  onSchemaWarnings?: OnSchemaWarnings;
 }
 
 interface ClientState {
@@ -160,7 +176,7 @@ interface ClientState {
 // TrafficalClient Class
 // =============================================================================
 
-export class TrafficalClient {
+export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _options: Required<
     Pick<TrafficalClientOptions, "orgId" | "projectId" | "env" | "apiKey" | "baseUrl" | "refreshIntervalMs">
   > & {
@@ -234,6 +250,26 @@ export class TrafficalClient {
     this._storage = options.storage ?? createStorageProvider();
     this._lifecycleProvider = options.lifecycleProvider ?? createBrowserLifecycleProvider();
 
+    // Default dev-mode schema warnings handler
+    if (!options.onSchemaWarnings) {
+      try {
+        const isDev = typeof globalThis !== "undefined"
+          && (globalThis as any).process?.env?.NODE_ENV === "development";
+        if (isDev) {
+          options.onSchemaWarnings = (warnings) => {
+            for (const w of warnings) {
+              console.warn(
+                `[Traffical] Schema warning for "${w.event}":`,
+                w.violations.map((v: { path: string; message: string }) => `${v.path}: ${v.message}`).join(", ")
+              );
+            }
+          };
+        }
+      } catch {
+        // process may not be available in browser environments
+      }
+    }
+
     this._eventLogger = new EventLogger({
       endpoint: `${this._options.baseUrl}/v1/events/batch`,
       apiKey: options.apiKey,
@@ -244,6 +280,7 @@ export class TrafficalClient {
       onError: (error) => {
         console.warn("[Traffical] Event logging error:", error.message);
       },
+      onSchemaWarnings: options.onSchemaWarnings,
     });
 
     this._exposureDedup = new ExposureDeduplicator({
@@ -581,9 +618,9 @@ export class TrafficalClient {
    * // Track with explicit decision attribution
    * client.track('checkout_complete', { value: 1 }, { decisionId: decision.decisionId });
    */
-  track(
-    eventName: string,
-    properties?: Record<string, unknown>,
+  track<E extends Extract<keyof TEvents, string>>(
+    eventName: E,
+    properties?: TEvents[E],
     options?: { decisionId?: string; unitKey?: string }
   ): void {
     this._errorBoundary.capture(
@@ -1102,8 +1139,8 @@ export class TrafficalClient {
 /**
  * Creates and initializes a Traffical client.
  */
-export async function createTrafficalClient(options: TrafficalClientOptions): Promise<TrafficalClient> {
-  const client = new TrafficalClient(options);
+export async function createTrafficalClient<TEvents extends TrackEventMap = TrackEventMap>(options: TrafficalClientOptions): Promise<TrafficalClient<TEvents>> {
+  const client = new TrafficalClient<TEvents>(options);
   await client.initialize();
   return client;
 }
@@ -1111,7 +1148,7 @@ export async function createTrafficalClient(options: TrafficalClientOptions): Pr
 /**
  * Creates a Traffical client without initializing (synchronous).
  */
-export function createTrafficalClientSync(options: TrafficalClientOptions): TrafficalClient {
-  return new TrafficalClient(options);
+export function createTrafficalClientSync<TEvents extends TrackEventMap = TrackEventMap>(options: TrafficalClientOptions): TrafficalClient<TEvents> {
+  return new TrafficalClient<TEvents>(options);
 }
 

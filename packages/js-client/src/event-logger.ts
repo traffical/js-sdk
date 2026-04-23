@@ -9,7 +9,7 @@
  * - Visibility-aware: flushes on visibilitychange to hidden
  */
 
-import type { TrackableEvent } from "@traffical/core";
+import type { TrackableEvent, OnSchemaWarnings, EventBatchResponse } from "@traffical/core";
 import type { StorageProvider } from "./storage.js";
 import type { LifecycleProvider, VisibilityState } from "./lifecycle.js";
 
@@ -33,6 +33,8 @@ export interface EventLoggerOptions {
   flushIntervalMs?: number;
   /** Callback on flush error */
   onError?: (error: Error) => void;
+  /** Callback when schema validation warnings are received from the edge (dev-mode) */
+  onSchemaWarnings?: OnSchemaWarnings;
 }
 
 export class EventLogger {
@@ -42,6 +44,7 @@ export class EventLogger {
   private _batchSize: number;
   private _flushIntervalMs: number;
   private _onError?: (error: Error) => void;
+  private _onSchemaWarnings?: OnSchemaWarnings;
 
   private _lifecycleProvider?: LifecycleProvider;
   private _queue: TrackableEvent[] = [];
@@ -56,6 +59,7 @@ export class EventLogger {
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
     this._onError = options.onError;
+    this._onSchemaWarnings = options.onSchemaWarnings;
     this._lifecycleProvider = options.lifecycleProvider;
 
     this._setupListeners();
@@ -176,6 +180,17 @@ export class EventLogger {
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    if (this._onSchemaWarnings) {
+      try {
+        const body: EventBatchResponse = await response.json();
+        if (body.schemaWarnings && body.schemaWarnings.length > 0) {
+          this._onSchemaWarnings(body.schemaWarnings);
+        }
+      } catch {
+        // Response parsing is best-effort for dev-mode warnings
+      }
     }
   }
 

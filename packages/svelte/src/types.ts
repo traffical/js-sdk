@@ -10,6 +10,8 @@ import type {
   Context,
   DecisionResult,
   ParameterValue,
+  TrackEventMap,
+  TypedTrackFn,
 } from "@traffical/core";
 
 // =============================================================================
@@ -210,6 +212,7 @@ export interface BoundTrackRewardOptions {
  */
 export interface UseTrafficalResult<
   T extends Record<string, ParameterValue> = Record<string, ParameterValue>,
+  TEvents extends TrackEventMap = TrackEventMap,
 > {
   /**
    * Resolved parameter values (deep reactive proxy).
@@ -228,11 +231,13 @@ export interface UseTrafficalResult<
    * Track a user event. The decisionId is automatically bound.
    * No-op if tracking="none" or no decision is available.
    *
+   * When `TEvents` is provided (from codegen), event names and properties are type-checked.
+   *
    * @example
    * track('purchase', { value: 99.99, orderId: 'ord_123' });
    * track('add_to_cart', { itemId: 'sku_456' });
    */
-  track: (event: string, properties?: Record<string, unknown>) => void;
+  track: TypedTrackFn<TEvents>;
   /**
    * @deprecated Use track() instead.
    * Track a reward for this decision. The decisionId is automatically bound.
@@ -311,6 +316,8 @@ export type {
   ParameterValue,
   TrafficalClient,
   TrafficalPlugin,
+  TrackEventMap,
+  TypedTrackFn,
 };
 
 // Server-side types (from @traffical/node)

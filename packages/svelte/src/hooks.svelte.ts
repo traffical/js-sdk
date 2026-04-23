@@ -21,6 +21,8 @@ import type {
   ParameterValue,
   DecisionResult,
   Context,
+  TrackEventMap,
+  TypedTrackFn,
 } from "@traffical/core";
 import type {
   TrafficalPlugin,
@@ -97,9 +99,12 @@ function isBrowser(): boolean {
  * </script>
  * ```
  */
-export function useTraffical<T extends Record<string, ParameterValue>>(
+export function useTraffical<
+  T extends Record<string, ParameterValue>,
+  TEvents extends TrackEventMap = TrackEventMap,
+>(
   options: UseTrafficalOptions<T>
-): UseTrafficalResult<T> {
+): UseTrafficalResult<T, TEvents> {
   const ctx = getTrafficalContext();
 
   const trackingMode = options.tracking ?? "full";
@@ -290,7 +295,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
       return ctx.error;
     },
     trackExposure,
-    track,
+    track: track as TypedTrackFn<TEvents>,
     trackReward,
   };
 }
@@ -318,13 +323,19 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
  * </script>
  * ```
  */
-export function useTrafficalTrack(): (options: TrackEventOptions) => void {
+export function useTrafficalTrack<TEvents extends TrackEventMap = TrackEventMap>(): {
+  <E extends Extract<keyof TEvents, string>>(options: {
+    event: E;
+    properties?: TEvents[E];
+    decisionId?: string;
+  }): void;
+} {
   const ctx = getTrafficalContext();
 
-  return function track(options: TrackEventOptions): void {
+  return function track(options: { event: string; properties?: Record<string, unknown>; decisionId?: string }): void {
     if (!isBrowser() || !ctx.client) {
       if (!isBrowser()) {
-        return; // Silent no-op during SSR
+        return;
       }
       console.warn("[Traffical] Client not initialized, cannot track event");
       return;
@@ -334,7 +345,7 @@ export function useTrafficalTrack(): (options: TrackEventOptions) => void {
       decisionId: options.decisionId,
       unitKey: ctx.getUnitKey(),
     });
-  };
+  } as any;
 }
 
 // =============================================================================

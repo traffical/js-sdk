@@ -13,7 +13,7 @@
  * - Uses standard fetch for HTTP requests
  */
 
-import type { TrackableEvent } from "@traffical/core";
+import type { TrackableEvent, OnSchemaWarnings, EventBatchResponse } from "@traffical/core";
 
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000; // 30 seconds
@@ -34,6 +34,8 @@ export interface EventBatcherOptions {
   onError?: (error: Error) => void;
   /** Enable debug logging */
   debug?: boolean;
+  /** Callback when schema validation warnings are received from the edge (dev-mode) */
+  onSchemaWarnings?: OnSchemaWarnings;
 }
 
 export class EventBatcher {
@@ -42,6 +44,7 @@ export class EventBatcher {
   private readonly _batchSize: number;
   private readonly _flushIntervalMs: number;
   private readonly _onError?: (error: Error) => void;
+  private readonly _onSchemaWarnings?: OnSchemaWarnings;
   private readonly _debug: boolean;
 
   private _queue: TrackableEvent[] = [];
@@ -55,6 +58,7 @@ export class EventBatcher {
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
     this._onError = options.onError;
+    this._onSchemaWarnings = options.onSchemaWarnings;
     this._debug = options.debug ?? false;
 
     // Start flush timer
@@ -178,6 +182,17 @@ export class EventBatcher {
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    if (this._onSchemaWarnings) {
+      try {
+        const body: EventBatchResponse = await response.json();
+        if (body.schemaWarnings && body.schemaWarnings.length > 0) {
+          this._onSchemaWarnings(body.schemaWarnings);
+        }
+      } catch {
+        // Response parsing is best-effort for dev-mode warnings
+      }
     }
   }
 

@@ -25,6 +25,8 @@ import {
   type DecisionEvent,
   type ServerResolveResponse,
   type AssignmentLogger,
+  type TrackEventMap,
+  type OnSchemaWarnings,
   resolveParameters,
   decide as coreDecide,
   DecisionDeduplicator,
@@ -106,6 +108,13 @@ export interface TrafficalClientOptions extends CoreClientOptions {
    * (same unit+policy+variant won't fire again within TTL). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
+
+  /**
+   * Callback for schema validation warnings from the edge.
+   * Only fires when event schemas are defined and enforcement is "warn".
+   * Recommended for development builds to surface schema violations.
+   */
+  onSchemaWarnings?: OnSchemaWarnings;
 }
 
 // =============================================================================
@@ -137,7 +146,7 @@ interface ClientState {
  * - Graceful degradation with local config and schema defaults
  * - Rate-limited offline warnings
  */
-export class TrafficalClient {
+export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _options: Required<
     Pick<
       TrafficalClientOptions,
@@ -192,6 +201,18 @@ export class TrafficalClient {
       apiKey: this._options.apiKey,
     });
 
+    // Default dev-mode schema warnings handler
+    if (!options.onSchemaWarnings && typeof process !== "undefined" && process.env?.NODE_ENV === "development") {
+      options.onSchemaWarnings = (warnings) => {
+        for (const w of warnings) {
+          console.warn(
+            `[Traffical] Schema warning for "${w.event}":`,
+            w.violations.map(v => `${v.path}: ${v.message}`).join(", ")
+          );
+        }
+      };
+    }
+
     // Initialize event batcher
     this._eventBatcher = new EventBatcher({
       endpoint: `${this._options.baseUrl}/v1/events/batch`,
@@ -202,6 +223,7 @@ export class TrafficalClient {
       onError: (error) => {
         console.warn(`[Traffical] Event batching error: ${error.message}`);
       },
+      onSchemaWarnings: options.onSchemaWarnings,
     });
 
     // Initialize decision deduplicator
@@ -407,9 +429,9 @@ export class TrafficalClient {
    * // Track with explicit decision attribution
    * client.track('checkout_complete', { value: 1 }, { decisionId: 'dec_xyz' });
    */
-  track(
-    event: string,
-    properties?: Record<string, unknown>,
+  track<E extends Extract<keyof TEvents, string>>(
+    event: E,
+    properties?: TEvents[E],
     options?: { decisionId?: string; unitKey?: string }
   ): void {
     const value = typeof properties?.value === 'number' ? properties.value : undefined;
@@ -703,10 +725,10 @@ export class TrafficalClient {
    * });
  * ```
  */
-export async function createTrafficalClient(
+export async function createTrafficalClient<TEvents extends TrackEventMap = TrackEventMap>(
   options: TrafficalClientOptions
-): Promise<TrafficalClient> {
-  const client = new TrafficalClient(options);
+): Promise<TrafficalClient<TEvents>> {
+  const client = new TrafficalClient<TEvents>(options);
   await client.initialize();
   return client;
 }
@@ -715,9 +737,9 @@ export async function createTrafficalClient(
  * Creates a Traffical client without initializing (synchronous).
  * Useful when you want to control initialization timing.
  */
-export function createTrafficalClientSync(
+export function createTrafficalClientSync<TEvents extends TrackEventMap = TrackEventMap>(
   options: TrafficalClientOptions
-): TrafficalClient {
-  return new TrafficalClient(options);
+): TrafficalClient<TEvents> {
+  return new TrafficalClient<TEvents>(options);
 }
 

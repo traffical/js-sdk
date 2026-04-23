@@ -10,6 +10,8 @@ import type {
   ParameterValue,
   DecisionResult,
   Context,
+  TrackEventMap,
+  TypedTrackFn,
 } from "@traffical/core";
 import { resolveParameters } from "@traffical/core";
 import type { TrafficalPlugin } from "@traffical/js-client";
@@ -106,8 +108,11 @@ export interface BoundTrackRewardOptions {
 
 /**
  * Return value from the useTraffical hook.
+ *
+ * When `TEvents` is provided (from codegen), the `track` function is type-safe:
+ * only known event names and their matching properties are accepted.
  */
-export interface UseTrafficalResult<T> {
+export interface UseTrafficalResult<T, TEvents extends TrackEventMap = TrackEventMap> {
   /** Resolved parameter values */
   params: T;
   /** The full decision result (null when tracking="none") */
@@ -126,7 +131,7 @@ export interface UseTrafficalResult<T> {
    * track('purchase', { value: 99.99, orderId: 'ord_123' });
    * track('add_to_cart', { itemId: 'sku_456' });
    */
-  track: (event: string, properties?: Record<string, unknown>) => void;
+  track: TypedTrackFn<TEvents>;
   /**
    * Flush all pending events immediately.
    * Useful after critical conversions (like purchases) before page navigation.
@@ -171,9 +176,12 @@ export interface UseTrafficalResult<T> {
  * });
  * ```
  */
-export function useTraffical<T extends Record<string, ParameterValue>>(
+export function useTraffical<
+  T extends Record<string, ParameterValue>,
+  TEvents extends TrackEventMap = TrackEventMap
+>(
   options: UseTrafficalOptions<T>
-): UseTrafficalResult<T> {
+): UseTrafficalResult<T, TEvents> {
   const { client, ready, error, getContext, getUnitKey, initialParams, localConfig, overrideVersion } =
     useTrafficalContext();
 
@@ -406,7 +414,7 @@ export function useTraffical<T extends Record<string, ParameterValue>>(
     await client.flushEvents();
   }, [client]);
 
-  return { params, decision, ready, error, trackExposure, track, flushEvents, trackReward };
+  return { params, decision, ready, error, trackExposure, track: track as TypedTrackFn<TEvents>, flushEvents, trackReward };
 }
 
 // =============================================================================
@@ -556,7 +564,7 @@ export function useTrafficalDecision<T extends Record<string, ParameterValue>>(
  * };
  * ```
  */
-export function useTrafficalTrack() {
+export function useTrafficalTrack<TEvents extends TrackEventMap = TrackEventMap>(): TypedTrackFn<TEvents> {
   const { client, getUnitKey } = useTrafficalContext();
 
   const track = useCallback(
@@ -578,7 +586,7 @@ export function useTrafficalTrack() {
     [client, getUnitKey]
   );
 
-  return track;
+  return track as TypedTrackFn<TEvents>;
 }
 
 /**

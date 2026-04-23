@@ -147,7 +147,15 @@ export type {
   ParameterValue,
   TrafficalClient as TrafficalClientType,
   TrafficalPlugin,
+  // Event schema types
+  TrackEventMap,
+  TypedTrackFn,
 } from "./types.js";
+
+export type {
+  OnSchemaWarnings,
+  EventSchemaWarning,
+} from "@traffical/core";
 
 export type { WarehouseNativeLoggerOptions } from "@traffical/js-client";
 

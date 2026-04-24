@@ -304,6 +304,53 @@ The redirect plugin automatically adds these context fields:
 
 Use `url.pathname` in policy conditions to target specific pages.
 
+## Type-Safe Event Tracking
+
+Use `@traffical/cli generate-types` to generate TypeScript interfaces for your event schemas. This lets you create a strictly typed `track` function that catches invalid event names and properties at compile time.
+
+### 1. Generate types from your config
+
+```bash
+bunx @traffical/cli generate-types
+# → creates .traffical/traffical.generated.ts
+```
+
+### 2. Create a typed track wrapper
+
+```typescript
+import type { TrafficalEventProperties } from './traffical.generated';
+import { createTrafficalClient } from '@traffical/js-client';
+
+type TypedTrack = <E extends Extract<keyof TrafficalEventProperties, string>>(
+  event: E,
+  properties?: TrafficalEventProperties[E],
+  options?: { decisionId?: string; unitKey?: string }
+) => void;
+
+const client = await createTrafficalClient({ /* ... */ });
+
+// Cast client.track to the strict type
+export const track = client.track.bind(client) as unknown as TypedTrack;
+```
+
+### 3. Use it — invalid properties are caught at compile time
+
+```typescript
+track('purchase', {
+  order_total: 99.99,
+  payment_method: 'visa',
+}); // ✅
+
+track('purchase', {
+  order_total: 99.99,
+  random_field: true, // ❌ Type error
+});
+
+track('nonexistent_event'); // ❌ Type error
+```
+
+---
+
 ## Development
 
 ### Build

@@ -529,6 +529,100 @@ const { params } = useTraffical<CheckoutParams>({
 // params['checkout.showDiscount'] is typed as boolean
 ```
 
+## Type-Safe Event Tracking
+
+The `useTraffical` hook supports a `TEvents` generic that enforces event names and property shapes at compile time. Combined with `@traffical/cli generate-types`, you get full type safety on every `track()` call.
+
+### 1. Generate types from your config
+
+```bash
+bunx @traffical/cli generate-types
+# → creates .traffical/traffical.generated.ts
+```
+
+This generates interfaces for each event's properties and a `TrafficalEventProperties` map:
+
+```typescript
+// traffical.generated.ts (auto-generated, do not edit)
+export interface CourseViewedProperties {
+  course_id: string;
+  category?: "experimentation" | "growth" | "retention";
+  layout?: "hero" | "compact";
+}
+
+export interface TrafficalEventProperties {
+  "course_viewed": CourseViewedProperties;
+  "lesson_complete": LessonCompleteProperties;
+  // ...
+}
+```
+
+### 2. Create a typed wrapper
+
+```typescript
+// src/lib/traffical.ts
+import type { TrafficalEventProperties } from '../traffical.generated';
+import { useTraffical as useTrafficalBase, type UseTrafficalOptions, type ParameterValue } from '@traffical/svelte';
+
+export type TrafficalTrack = <E extends Extract<keyof TrafficalEventProperties, string>>(
+  event: E,
+  properties?: TrafficalEventProperties[E],
+  options?: { decisionId?: string; unitKey?: string }
+) => void;
+
+export function useTraffical<T extends Record<string, ParameterValue>>(
+  options: UseTrafficalOptions<T>
+) {
+  const result = useTrafficalBase<T>(options);
+  return { ...result, track: result.track as unknown as TrafficalTrack };
+}
+
+// Re-export all generated types for convenient imports
+export type * from '../traffical.generated';
+```
+
+### 3. Use it — TypeScript catches mistakes
+
+```svelte
+<script lang="ts">
+  import { useTraffical } from '$lib/traffical';
+  import type { CourseViewedProperties } from '$lib/traffical';
+
+  const { params, track } = useTraffical({
+    defaults: { 'course_detail.layout': 'hero' },
+  });
+
+  // ✅ compiles — layout cast via generated type
+  track('course_viewed', {
+    course_id: 'course-1',
+    layout: params['course_detail.layout'] as CourseViewedProperties['layout'],
+  });
+
+  // ❌ Type error: 'bogus' is not in TrafficalEventProperties
+  track('bogus', { foo: 1 });
+</script>
+```
+
+### Casting enum values
+
+When a runtime value (e.g., from params or URL) maps to a schema-defined enum, cast it via the generated property type to stay in sync with schema changes:
+
+```typescript
+import type { BrowseSearchedProperties } from '$lib/traffical';
+
+// ✅ Cast references the generated type — auto-updates when schema changes
+track('browse_searched', {
+  sort_by: selectedSort as BrowseSearchedProperties['sort_by'],
+});
+
+// ⚠️ Fragile — inline union must be kept in sync manually
+track('browse_searched', {
+  sort_by: selectedSort as 'popular' | 'top-rated' | 'newest',
+});
+```
+
+---
+
 ## Comparison with React SDK
 
 | Feature | React | Svelte |

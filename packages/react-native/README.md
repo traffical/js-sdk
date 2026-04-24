@@ -324,6 +324,62 @@ function CheckoutScreen({ navigation }) {
 
 ---
 
+## Type-Safe Event Tracking
+
+The `useTraffical` hook supports a `TEvents` generic that enforces event names and property shapes at compile time. Combined with `@traffical/cli generate-types`, you get full type safety on every `track()` call.
+
+### 1. Generate types from your config
+
+```bash
+bunx @traffical/cli generate-types
+# → creates .traffical/traffical.generated.ts
+```
+
+### 2. Create a typed wrapper
+
+```typescript
+// lib/traffical.ts
+import type { TrafficalEventProperties } from './traffical.generated';
+import { useTraffical as useTrafficalBase, type UseTrafficalOptions, type ParameterValue } from '@traffical/react-native';
+
+export type TrafficalTrack = <E extends Extract<keyof TrafficalEventProperties, string>>(
+  event: E,
+  properties?: TrafficalEventProperties[E],
+  options?: { decisionId?: string; unitKey?: string }
+) => void;
+
+export function useTraffical<T extends Record<string, ParameterValue>>(
+  options: UseTrafficalOptions<T>
+) {
+  const result = useTrafficalBase<T>(options);
+  return { ...result, track: result.track as unknown as TrafficalTrack };
+}
+```
+
+### 3. Use it
+
+```tsx
+import { useTraffical } from '@/lib/traffical';
+
+function PaywallScreen() {
+  const { params, track } = useTraffical({
+    defaults: { 'paywall.headline': 'Go Premium' },
+  });
+
+  track('subscribe', {
+    plan: 'pro_monthly',
+    value: 9.99,
+  }); // ✅ compiles — properties checked against generated schema
+
+  track('subscribe', {
+    plan: 'pro_monthly',
+    bogus: true, // ❌ Type error: not in SubscribeProperties
+  });
+}
+```
+
+---
+
 ## Differences from @traffical/react
 
 | | `@traffical/react` | `@traffical/react-native` |

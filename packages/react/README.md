@@ -1037,6 +1037,111 @@ Yes! That's the point. Parameters are resolved from Traffical's config bundle, w
 ---
 
 
+## Type-Safe Event Tracking
+
+The `useTraffical` hook supports a `TEvents` generic that enforces event names and property shapes at compile time. Combined with `@traffical/cli generate-types`, you get full type safety on every `track()` call.
+
+### 1. Generate types from your config
+
+```bash
+bunx @traffical/cli generate-types
+# → creates .traffical/traffical.generated.ts
+```
+
+This generates interfaces for each event's properties and a `TrafficalEventProperties` map:
+
+```typescript
+// traffical.generated.ts (auto-generated, do not edit)
+export interface PurchaseProperties {
+  order_total: number;
+  payment_method: "visa" | "mastercard" | "paypal";
+  item_count?: number;
+}
+
+export interface TrafficalEventProperties {
+  "purchase": PurchaseProperties;
+  "add_to_cart": AddToCartProperties;
+  // ...
+}
+```
+
+### 2. Create a typed wrapper
+
+```typescript
+// lib/traffical.ts
+import type { TrafficalEventProperties } from './traffical.generated';
+import { useTraffical as useTrafficalBase, type UseTrafficalOptions, type ParameterValue } from '@traffical/react';
+
+// Strict track — only allows events and properties defined in the schema
+export type TrafficalTrack = <E extends Extract<keyof TrafficalEventProperties, string>>(
+  event: E,
+  properties?: TrafficalEventProperties[E],
+  options?: { decisionId?: string; unitKey?: string }
+) => void;
+
+export function useTraffical<T extends Record<string, ParameterValue>>(
+  options: UseTrafficalOptions<T>
+) {
+  const result = useTrafficalBase<T>(options);
+  return { ...result, track: result.track as unknown as TrafficalTrack };
+}
+```
+
+### 3. Use it — TypeScript catches mistakes
+
+```tsx
+import { useTraffical } from '@/lib/traffical';
+
+function CheckoutPage() {
+  const { params, track } = useTraffical({
+    defaults: { 'checkout.ctaText': 'Buy Now' },
+  });
+
+  track('purchase', {
+    order_total: 99.99,
+    payment_method: 'visa',
+  }); // ✅ compiles
+
+  track('purchase', {
+    order_total: 99.99,
+    payment_method: 'bitcoin', // ❌ Type error: not in "visa" | "mastercard" | "paypal"
+  });
+
+  track('purchase', {
+    order_total: 99.99,
+    payment_method: 'visa',
+    random_field: true, // ❌ Type error: not in PurchaseProperties
+  });
+
+  track('nonexistent_event'); // ❌ Type error: not in TrafficalEventProperties
+}
+```
+
+### Typing component props
+
+Use `TrafficalTrack` when passing `track` as a prop to child components:
+
+```tsx
+import type { TrafficalTrack } from '@/lib/traffical';
+
+interface ProductCardProps {
+  product: Product;
+  track?: TrafficalTrack;
+}
+
+function ProductCard({ product, track }: ProductCardProps) {
+  const handleAdd = () => {
+    track?.('add_to_cart', {
+      product_id: product.id,
+      quantity: 1,
+    });
+  };
+  // ...
+}
+```
+
+---
+
 ## Migration from Deprecated Hooks
 
 The `useTrafficalParams` and `useTrafficalDecision` hooks are deprecated but still available for backward compatibility.

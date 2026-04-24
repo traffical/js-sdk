@@ -148,6 +148,59 @@ const context: Context = {
 const decision: DecisionResult = await client.decide(context);
 ```
 
+## Type-Safe Event Tracking
+
+Use `@traffical/cli generate-types` to generate TypeScript interfaces for your event schemas. This lets you create a strictly typed `track` wrapper that catches invalid event names and properties at compile time.
+
+### 1. Generate types
+
+```bash
+bunx @traffical/cli generate-types
+```
+
+### 2. Create a typed wrapper
+
+```typescript
+import type { TrafficalEventProperties } from './traffical.generated';
+import { TrafficalClient } from '@traffical/node';
+
+type TypedTrack = <E extends Extract<keyof TrafficalEventProperties, string>>(
+  event: E,
+  options: {
+    decisionId: string;
+    unitKey: string;
+    properties?: TrafficalEventProperties[E];
+  }
+) => Promise<void>;
+
+const client = new TrafficalClient({ apiKey: 'sk_...' });
+export const track = client.track.bind(client) as unknown as TypedTrack;
+```
+
+### 3. Use it
+
+```typescript
+await track('purchase', {
+  decisionId: decision.decisionId,
+  unitKey: 'user-123',
+  properties: {
+    order_total: 99.99,
+    payment_method: 'visa',
+  },
+}); // ✅
+
+await track('purchase', {
+  decisionId: decision.decisionId,
+  unitKey: 'user-123',
+  properties: {
+    order_total: 99.99,
+    unknown_field: true, // ❌ Type error
+  },
+});
+```
+
+---
+
 ## License
 
 MIT

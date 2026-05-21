@@ -103,6 +103,15 @@ export interface BundleDOMBinding {
 export interface BundleLayer {
   /** Layer ID */
   id: Id;
+  /**
+   * Unit key override for this layer. When set, the SDK reads this context
+   * field instead of `bundle.hashing.unitKey` for bucket computation.
+   *
+   * Only present for layers whose entity differs from the project's primary
+   * entity (multi-entity projects). For single-entity projects this is
+   * omitted to keep the bundle small.
+   */
+  unitKey?: string;
   /** Policies within this layer (evaluated in order) */
   policies: BundlePolicy[];
 }
@@ -364,6 +373,18 @@ export interface LayerResolution {
   allocationName?: string;
   /** Stable key of the matched allocation (for warehouse data matching) */
   allocationKey?: string;
+  /**
+   * The context field name used to compute the bucket for this layer. Only
+   * present when the layer overrides the project's default unit key (multi-
+   * entity projects). For default-entity layers this is omitted and the
+   * top-level `hashing.unitKey` applies.
+   */
+  unitKey?: string;
+  /**
+   * The value of the unit key used for this layer's bucket computation. Only
+   * present when `unitKey` is set.
+   */
+  unitKeyValue?: string;
   /**
    * When true, this layer was resolved for attribution/assignment purposes only —
    * no parameters from this layer were requested by the caller.

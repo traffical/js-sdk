@@ -282,12 +282,18 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
     return { assignments: assignments as T, unitKeyValue: "", layers, matchedPolicies };
   }
 
-  // Try to get unit key
-  const unitKeyValue = getUnitKeyValue(bundle, context);
-  if (!unitKeyValue) {
-    // Missing unit key - return defaults
-    return { assignments: assignments as T, unitKeyValue: "", layers, matchedPolicies };
-  }
+  // Project-level unit key. Layers that don't override `unitKey` use this.
+  // In multi-entity projects, individual layers may set `unitKey` to a
+  // different context field (e.g. `merchantId` when the project default is
+  // `customerId`); those layers compute their own unit value below.
+  //
+  // We no longer bail out when this is missing — some layers in multi-entity
+  // projects may still resolve via their own unit key. The empty string we
+  // store in `unitKeyValue` is the legacy "no project unit key" signal that
+  // downstream code (decision events) already tolerates.
+  //
+  // See: ng/docs/design/diversion-types.md
+  const projectUnitKeyValue = getUnitKeyValue(bundle, context) ?? "";
 
   // Get requested parameter keys from defaults
   const requestedKeys = new Set(Object.keys(defaults));
@@ -325,9 +331,29 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
     const layerParams = paramsByLayer.get(layer.id);
     const hasParams = layerParams && layerParams.length > 0;
 
+    // Per-layer unit key resolution. Layers in multi-entity projects may
+    // override `unitKey` to read a different context field. When a layer's
+    // unit value can't be resolved (missing context field), we still emit a
+    // LayerResolution row (with `bucket = -1`) so decision events record the
+    // skipped layer, but no bucket-based policy can match.
+    const layerUnitKey = layer.unitKey;
+    const layerUnitValue = layerUnitKey
+      ? String(context[layerUnitKey] ?? "")
+      : projectUnitKeyValue;
+
+    if (!layerUnitValue) {
+      layers.push({
+        layerId: layer.id,
+        bucket: -1,
+        ...(layerUnitKey ? { unitKey: layerUnitKey, unitKeyValue: "" } : {}),
+        ...(hasParams ? {} : { attributionOnly: true }),
+      });
+      continue;
+    }
+
     // Compute bucket (needed for both parameter resolution and attribution)
     const bucket = computeBucket(
-      unitKeyValue,
+      layerUnitValue,
       layer.id,
       bundle.hashing.bucketCount
     );
@@ -352,7 +378,7 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
 
       // Contextual model scoring: overrides bucket-based allocation
       if (policy.contextualModel) {
-        const ctxAllocation = resolveContextualPolicy(policy, context, unitKeyValue);
+        const ctxAllocation = resolveContextualPolicy(policy, context, layerUnitValue);
         if (ctxAllocation) {
           matchedPolicy = policy;
           matchedAllocation = ctxAllocation;
@@ -370,7 +396,7 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
 
       // Check if this is a per-entity policy
       if (policy.entityConfig && policy.entityConfig.resolutionMode === "bundle") {
-        const result = resolvePerEntityPolicy(bundle, policy, context, unitKeyValue);
+        const result = resolvePerEntityPolicy(bundle, policy, context, layerUnitValue);
         if (result) {
           matchedPolicy = policy;
           matchedAllocation = result.allocation;
@@ -455,6 +481,10 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       allocationId: matchedAllocation?.id,
       allocationName: matchedAllocation?.name,
       allocationKey: (matchedAllocation as any)?.key,
+      // Record the unit key only when the layer overrides the project
+      // default — keeps the metadata small for the single-entity case while
+      // making exposure events auditable in multi-entity projects.
+      ...(layerUnitKey ? { unitKey: layerUnitKey, unitKeyValue: layerUnitValue } : {}),
       // Mark layers without requested parameters as attribution-only.
       // These are included in decision events and track-event attribution
       // but skipped by trackExposure() to avoid exposure inflation.
@@ -462,7 +492,7 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
     });
   }
 
-  return { assignments: assignments as T, unitKeyValue, layers, matchedPolicies };
+  return { assignments: assignments as T, unitKeyValue: projectUnitKeyValue, layers, matchedPolicies };
 }
 
 /**

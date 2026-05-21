@@ -57,13 +57,19 @@ describe("resolveParameters", () => {
     expect(assignments["pricing.discount"]).toBe(10); // discount_10 (bucket 177 in 0-299)
   });
 
-  test("returns defaults when unit key is missing", () => {
+  test("falls back to bundle param defaults when unit key is missing", () => {
+    // Multi-entity diversion-types change: the engine no longer bails
+    // out when the project-level unit key is missing — some layers may
+    // still resolve via a layer-level `unitKey` override. With no unit
+    // key resolvable for any layer here, every layer is skipped with
+    // `bucket = -1`, so no allocation overrides apply. Bundle parameter
+    // defaults are surfaced instead of caller defaults so the user sees
+    // the publisher-intended baseline.
     const assignments = resolveParameters(bundle, {}, basicDefaults);
 
-    // Should return caller defaults when unit key is missing
-    expect(assignments["ui.primaryColor"]).toBe("#0000FF");
-    expect(assignments["ui.buttonText"]).toBe("Click Me");
-    expect(assignments["pricing.discount"]).toBe(0);
+    expect(assignments["ui.primaryColor"]).toBe("#000000"); // bundle default
+    expect(assignments["ui.buttonText"]).toBe("Click Me"); // bundle default
+    expect(assignments["pricing.discount"]).toBe(0); // bundle default
   });
 
   test("returns defaults when bundle is null", () => {
@@ -178,14 +184,18 @@ describe("resolveParameters graceful degradation", () => {
     expect(result["ui.fontSize"]).toBe(16);
   });
 
-  test("returns caller defaults when unit key is missing", () => {
+  test("falls back to bundle param defaults when unit key is missing", () => {
+    // See per-layer unit key change: with no project unit key and no
+    // layer-level override resolvable, every layer is skipped and
+    // bundle parameter defaults win over caller defaults for keys the
+    // bundle knows about.
     const defaults = {
       "ui.primaryColor": "#FFFFFF",
     };
 
     const result = resolveParameters(bundle, {}, defaults);
 
-    expect(result["ui.primaryColor"]).toBe("#FFFFFF");
+    expect(result["ui.primaryColor"]).toBe("#000000"); // bundle default
   });
 });
 
@@ -230,13 +240,20 @@ describe("decide", () => {
     expect(decision.metadata.layers).toHaveLength(0);
   });
 
-  test("returns defaults with empty metadata when unit key is missing", () => {
+  test("emits skipped layer metadata when unit key is missing", () => {
+    // See diversion-types change: the engine no longer short-circuits on
+    // a missing project unit key. It records each layer with
+    // `bucket = -1` so decision events still describe what would have
+    // been considered, and bundle param defaults are returned.
     const decision = decide(bundle, {}, basicDefaults);
 
     expect(decision.decisionId).toMatch(/^dec_/);
-    expect(decision.assignments["ui.primaryColor"]).toBe("#0000FF");
+    expect(decision.assignments["ui.primaryColor"]).toBe("#000000");
     expect(decision.metadata.unitKeyValue).toBe("");
-    expect(decision.metadata.layers).toHaveLength(0);
+    expect(decision.metadata.layers).toHaveLength(2);
+    for (const layer of decision.metadata.layers) {
+      expect(layer.bucket).toBe(-1);
+    }
   });
 });
 
@@ -363,5 +380,151 @@ describe("decide - attribution-only layers", () => {
     // Only pricing.discount in assignments (with override applied)
     expect(decision.assignments["pricing.discount"]).toBe(10);
     expect(decision.assignments["ui.primaryColor"]).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// Per-layer unit key (multi-entity randomization)
+// =============================================================================
+//
+// Covers the diversion-types change: each layer can carry its own
+// `unitKey` that overrides `bundle.hashing.unitKey`. Layers whose unit
+// key is missing in context are skipped (bucket -1, no overrides),
+// while sibling layers continue to resolve.
+//
+// We construct the bundle inline to avoid baking new fixtures into
+// `@traffical/sdk-spec` for this incremental field.
+describe("decide - per-layer unit key", () => {
+  function buildMixedUnitBundle(): ConfigBundle {
+    return {
+      version: "2024-01-01T00:00:00.000Z",
+      orgId: "org_test",
+      projectId: "proj_test",
+      env: "production",
+      hashing: { unitKey: "userId", bucketCount: 1000 },
+      parameters: [
+        {
+          key: "ui.primaryColor",
+          type: "string",
+          default: "#000000",
+          layerId: "layer_ui",
+          namespace: "ui",
+        },
+        {
+          key: "pricing.discount",
+          type: "number",
+          default: 0,
+          layerId: "layer_pricing",
+          namespace: "pricing",
+        },
+      ],
+      layers: [
+        {
+          id: "layer_ui",
+          policies: [
+            {
+              id: "policy_color_test",
+              state: "running",
+              kind: "static",
+              allocations: [
+                {
+                  name: "control",
+                  bucketRange: [0, 499],
+                  overrides: { "ui.primaryColor": "#0000FF" },
+                },
+                {
+                  name: "treatment",
+                  bucketRange: [500, 999],
+                  overrides: { "ui.primaryColor": "#FF0000" },
+                },
+              ],
+              conditions: [],
+            },
+          ],
+        },
+        {
+          // Merchant-scoped layer in a customer-primary project. The
+          // SDK should hash on context.merchantId for this layer only.
+          id: "layer_pricing",
+          unitKey: "merchantId",
+          policies: [
+            {
+              id: "policy_discount",
+              state: "running",
+              kind: "static",
+              allocations: [
+                {
+                  name: "discount_10",
+                  bucketRange: [0, 999],
+                  overrides: { "pricing.discount": 10 },
+                },
+              ],
+              conditions: [],
+            },
+          ],
+        },
+      ],
+    } as unknown as ConfigBundle;
+  }
+
+  const defaults = {
+    "ui.primaryColor": "#000000",
+    "pricing.discount": 0,
+  };
+
+  test("uses bundle.hashing.unitKey for layers without override", () => {
+    const bundle = buildMixedUnitBundle();
+    const decision = decide(
+      bundle,
+      { userId: "user-abc", merchantId: "merchant-1" },
+      defaults
+    );
+
+    const uiLayer = decision.metadata.layers.find((l) => l.layerId === "layer_ui");
+    expect(uiLayer).toBeDefined();
+    // No layer-level override → no unitKey/unitKeyValue surfaced for the
+    // ui layer.
+    expect(uiLayer!.unitKey).toBeUndefined();
+    expect(uiLayer!.unitKeyValue).toBeUndefined();
+  });
+
+  test("uses layer.unitKey override and surfaces it in LayerResolution", () => {
+    const bundle = buildMixedUnitBundle();
+    const decision = decide(
+      bundle,
+      { userId: "user-abc", merchantId: "merchant-1" },
+      defaults
+    );
+
+    const pricingLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_pricing"
+    );
+    expect(pricingLayer).toBeDefined();
+    expect(pricingLayer!.unitKey).toBe("merchantId");
+    expect(pricingLayer!.unitKeyValue).toBe("merchant-1");
+    // Allocation covers all buckets so we always get the override.
+    expect(decision.assignments["pricing.discount"]).toBe(10);
+  });
+
+  test("skips a layer whose unitKey is missing from context", () => {
+    const bundle = buildMixedUnitBundle();
+    // Only userId provided — the merchant-scoped layer should be
+    // skipped, while the customer-scoped layer still resolves.
+    const decision = decide(bundle, { userId: "user-abc" }, defaults);
+
+    const uiLayer = decision.metadata.layers.find((l) => l.layerId === "layer_ui");
+    const pricingLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_pricing"
+    );
+
+    // ui layer still resolves on userId (engine.ts already covered by
+    // the existing test suite — we assert it didn't regress).
+    expect(uiLayer).toBeDefined();
+    expect(uiLayer!.bucket).toBeGreaterThanOrEqual(0);
+
+    // pricing layer is skipped: no bucket assignment, no override.
+    expect(pricingLayer).toBeDefined();
+    expect(pricingLayer!.bucket).toBe(-1);
+    expect(decision.assignments["pricing.discount"]).toBe(0);
   });
 });

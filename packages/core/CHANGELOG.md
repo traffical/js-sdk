@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.7.0
+
+### Minor Changes
+
+- d71ae22: Add per-layer unit key support for multi-entity randomization. `BundleLayer` now accepts an optional `unitKey` override, and `LayerResolution` exposes `unitKey` / `unitKeyValue` on exposure events. The resolution engine resolves the unit key per layer, falling back to the bundle-level default.
+
 ## 0.6.0
 
 ### Minor Changes

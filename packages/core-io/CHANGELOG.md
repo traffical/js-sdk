@@ -1,5 +1,13 @@
 # @traffical/core-io
 
+## 0.5.3
+
+### Patch Changes
+
+- Updated dependencies [0181040]
+- Updated dependencies [0181040]
+  - @traffical/core@0.9.0
+
 ## 0.5.2
 
 ### Patch Changes

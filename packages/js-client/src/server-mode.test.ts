@@ -243,3 +243,74 @@ describe("TrafficalClient bundle mode (default)", () => {
     expect(url).toContain("/v1/config/");
   });
 });
+
+// =============================================================================
+// Assignment Logger Emit Behavior
+// =============================================================================
+
+describe("TrafficalClient assignmentLogger", () => {
+  test("decide() emits a 'decision' row with new fields", async () => {
+    setupFetchMock();
+    const entries: import("@traffical/core").AssignmentLogEntry[] = [];
+
+    const client = new TrafficalClient({
+      ...clientOpts,
+      evaluationMode: "server",
+      assignmentLogger: (entry) => entries.push(entry),
+    });
+    await client.initialize();
+
+    client.decide({ context: { userId: "user-1" }, defaults: { "ui.color": "#000" } });
+
+    expect(entries).toHaveLength(1);
+    const [entry] = entries;
+    expect(entry.type).toBe("decision");
+    expect(entry.policyId).toBe("pol_1");
+    expect(entry.allocationName).toBe("treatment");
+    expect(entry.decisionId).toBe("dec_server_1");
+    expect(typeof entry.anonymousId).toBe("string");
+    expect(entry.id).toMatch(/^asn_/);
+  });
+
+  test("decide() then trackExposure() produce two distinct rows (decision + exposure)", async () => {
+    setupFetchMock();
+    const entries: import("@traffical/core").AssignmentLogEntry[] = [];
+
+    const client = new TrafficalClient({
+      ...clientOpts,
+      evaluationMode: "server",
+      assignmentLogger: (entry) => entries.push(entry),
+    });
+    await client.initialize();
+
+    const decision = client.decide({
+      context: { userId: "user-1" },
+      defaults: { "ui.color": "#000" },
+    });
+    client.trackExposure(decision);
+
+    expect(entries).toHaveLength(2);
+    const types = entries.map((e) => e.type).sort();
+    expect(types).toEqual(["decision", "exposure"]);
+    // Each row has a unique id
+    expect(entries[0].id).not.toBe(entries[1].id);
+  });
+
+  test("repeated decide() calls for the same unit are deduplicated", async () => {
+    setupFetchMock();
+    const entries: import("@traffical/core").AssignmentLogEntry[] = [];
+
+    const client = new TrafficalClient({
+      ...clientOpts,
+      evaluationMode: "server",
+      assignmentLogger: (entry) => entries.push(entry),
+    });
+    await client.initialize();
+
+    client.decide({ context: { userId: "user-1" }, defaults: { "ui.color": "#000" } });
+    client.decide({ context: { userId: "user-1" }, defaults: { "ui.color": "#000" } });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].type).toBe("decision");
+  });
+});

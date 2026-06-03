@@ -60,7 +60,7 @@ export type EntityIdPrefix =
 /**
  * Event ID prefixes for each event type.
  */
-export type EventIdPrefix = "dec" | "exp" | "trk";
+export type EventIdPrefix = "dec" | "exp" | "trk" | "asn";
 
 // =============================================================================
 // Generic ID Generation
@@ -171,6 +171,11 @@ export function generateExposureId(): string {
 /** Generates a Track event ID with "trk_" prefix (ULID) */
 export function generateTrackEventId(): string {
   return generateEventId("trk");
+}
+
+/** Generates an Assignment log entry ID with "asn_" prefix (ULID) */
+export function generateAssignmentId(): string {
+  return generateEventId("asn");
 }
 
 // =============================================================================

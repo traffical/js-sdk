@@ -547,6 +547,12 @@ export type TrackableEvent = ExposureEvent | TrackEvent | DecisionEvent;
 // =============================================================================
 
 /**
+ * Discriminator for which call produced an assignment row.
+ * A subset of the canonical `BaseEvent.type` discriminator.
+ */
+export type AssignmentType = "decision" | "exposure";
+
+/**
  * Structured assignment log entry for warehouse-native analytics.
  *
  * Emitted by the optional `assignmentLogger` callback. Contains exactly
@@ -585,6 +591,14 @@ export interface AssignmentLogEntry {
   sdkVersion?: string;
   /** Optional: context/properties for segmentation (CUPED covariates) */
   properties?: Record<string, unknown>;
+  /** Event type that produced this row: matches BaseEvent.type discriminator */
+  type: AssignmentType;
+  /** Decision that produced this assignment (decision.decisionId) */
+  decisionId?: string;
+  /** Anonymous/stable id when available (client SDKs) */
+  anonymousId?: string;
+  /** Unique id for this assignment log entry */
+  id?: string;
 }
 
 /** Callback type for routing assignment events to a customer-managed pipeline. */

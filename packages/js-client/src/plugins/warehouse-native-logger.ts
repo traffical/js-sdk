@@ -55,6 +55,10 @@ export function createWarehouseNativeLoggerPlugin(
       org_id: entry.orgId,
       project_id: entry.projectId,
       env: entry.env,
+      type: entry.type,
+      decision_id: entry.decisionId,
+      anonymous_id: entry.anonymousId,
+      assignment_id: entry.id,
       ...entry.properties,
     });
   };

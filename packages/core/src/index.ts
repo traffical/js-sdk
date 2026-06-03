@@ -55,6 +55,7 @@ export type {
   // Warehouse-native assignment logger types
   AssignmentLogEntry,
   AssignmentLogger,
+  AssignmentType,
   // Client types
   TrafficalClientOptions,
   GetParamsOptions,
@@ -126,6 +127,7 @@ export {
   generateDecisionId,
   generateExposureId,
   generateTrackEventId,
+  generateAssignmentId,
   // Entity IDs (8-char NanoID)
   generateEntityId,
   generateShortId,

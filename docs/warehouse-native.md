@@ -67,6 +67,10 @@ const client = new TrafficalClient({
 | `layerId` | Layer identifier |
 | `orgId`, `projectId`, `env` | Scoping fields |
 | `properties` | Evaluation context at assignment time — useful as covariates |
+| `type` | `"decision"` or `"exposure"` — which call produced the row (matches the canonical event `type` discriminator) |
+| `decisionId` | The decision that produced this assignment (`decision.decisionId`) |
+| `anonymousId` | Anonymous/stable device id when available (client SDKs); `undefined` on the Node SDK |
+| `id` | Unique id for this assignment log entry (`asn_…`) |
 
 When building assignment definitions in the Traffical dashboard, map your warehouse columns to these fields.
 
@@ -91,7 +95,7 @@ const client = new TrafficalClient({
 });
 ```
 
-This tracks an `"Experiment Assignment"` event with properties: `unit_key`, `policy_key`, `allocation_key`, `timestamp`, `policy_id`, `allocation_name`, `layer_id`, `org_id`, `project_id`, `env`, plus any values from `entry.properties`.
+This tracks an `"Experiment Assignment"` event with properties: `unit_key`, `policy_key`, `allocation_key`, `timestamp`, `policy_id`, `allocation_name`, `layer_id`, `org_id`, `project_id`, `env`, `type`, `decision_id`, `anonymous_id`, `assignment_id`, plus any values from `entry.properties`.
 
 Load Segment's `analytics.js` as usual and pass the `analytics` object.
 
@@ -195,7 +199,7 @@ If revenue data already exists in your warehouse, there's no need to call `track
 deduplicateAssignmentLogger?: boolean; // default: true
 ```
 
-When enabled (the default), the SDK deduplicates logger calls within the session: the same combination of `unitKey` + `policyId` + `allocationName` will only fire `assignmentLogger` once until the session TTL expires.
+When enabled (the default), the SDK deduplicates logger calls within the session: the same combination of `unitKey` + `policyId` + `allocationName` + `type` will only fire `assignmentLogger` once until the session TTL expires. Because `type` participates in the dedup key, a single unit/policy/allocation can still emit both a `"decision"` row (from `decide()`) and an `"exposure"` row (from `trackExposure()`).
 
 Set to `false` if you need a row for every `decide()` / `trackExposure()` invocation (e.g., for audit logging). Be mindful of volume.
 
@@ -212,8 +216,8 @@ Assignment logger deduplication and cloud exposure deduplication are **independe
 
 ## When does `assignmentLogger` fire?
 
-- **`decide()`** — after resolving parameters, the logger fires once per layer that has a matched experiment and variant (subject to dedup).
-- **`trackExposure()`** — also fires the logger for each matched layer. If both `decide()` and `trackExposure()` are called for the same decision, `deduplicateAssignmentLogger: true` (default) prevents double logging.
+- **`decide()`** — after resolving parameters, the logger fires once per layer that has a matched experiment and variant, with `type: "decision"` (subject to dedup).
+- **`trackExposure()`** — also fires the logger for each matched layer, with `type: "exposure"`. Because `type` is part of the dedup key, calling both `decide()` and `trackExposure()` for the same decision produces two distinct rows (one `"decision"`, one `"exposure"`), while repeated calls of the same kind are deduplicated.
 
 The logger is **not** called when `unitKey` is missing from the decision metadata.
 

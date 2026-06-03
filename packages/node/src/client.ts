@@ -25,6 +25,7 @@ import {
   type DecisionEvent,
   type ServerResolveResponse,
   type AssignmentLogger,
+  type AssignmentType,
   type TrackEventMap,
   type OnSchemaWarnings,
   resolveParameters,
@@ -32,6 +33,7 @@ import {
   DecisionDeduplicator,
   generateExposureId,
   generateTrackEventId,
+  generateAssignmentId,
 } from "@traffical/core";
 
 import { DecisionClient } from "@traffical/core-io";
@@ -361,7 +363,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       if (this._options.trackDecisions) {
         this._trackDecision(decision, Date.now() - start, Object.keys(options.defaults));
       }
-      this._emitAssignmentLogEntries(decision);
+      this._emitAssignmentLogEntries(decision, "decision");
       return decision;
     }
 
@@ -375,7 +377,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       this._trackDecision(decision, latencyMs, Object.keys(options.defaults));
     }
 
-    this._emitAssignmentLogEntries(decision);
+    this._emitAssignmentLogEntries(decision, "decision");
 
     return decision;
   }
@@ -393,7 +395,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     }
 
     // Emit to assignment logger (separate from cloud events)
-    this._emitAssignmentLogEntries(decision);
+    this._emitAssignmentLogEntries(decision, "exposure");
 
     if (!this._disableCloudEvents) {
       const event: ExposureEvent = {
@@ -477,7 +479,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   // Private Methods
   // ===========================================================================
 
-  private _emitAssignmentLogEntries(decision: DecisionResult): void {
+  private _emitAssignmentLogEntries(decision: DecisionResult, type: AssignmentType): void {
     if (!this._assignmentLogger) return;
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) return;
@@ -488,7 +490,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       if (!layer.policyId || !layer.allocationName) continue;
 
       if (this._assignmentLoggerDedup) {
-        const dedupKey = `${unitKey}:${layer.policyId}:${layer.allocationName}`;
+        const dedupKey = `${unitKey}:${layer.policyId}:${layer.allocationName}:${type}`;
         const expiry = this._assignmentLoggerDedup.get(dedupKey);
         if (expiry !== undefined && now < expiry) continue;
 
@@ -513,6 +515,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         sdkName: SDK_NAME,
         sdkVersion: SDK_VERSION,
         properties: decision.metadata.filteredContext,
+        type,
+        decisionId: decision.decisionId,
+        anonymousId: undefined,
+        id: generateAssignmentId(),
       });
     }
   }

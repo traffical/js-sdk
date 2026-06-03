@@ -13,6 +13,7 @@ function sampleEntry(overrides: Partial<AssignmentLogEntry> = {}): AssignmentLog
     orgId: "org_1",
     projectId: "proj_1",
     env: "production",
+    type: "decision",
     ...overrides,
   };
 }
@@ -38,6 +39,10 @@ describe("createWarehouseNativeLoggerPlugin", () => {
         org_id: "org_1",
         project_id: "proj_1",
         env: "production",
+        type: "decision",
+        decision_id: undefined,
+        anonymous_id: undefined,
+        assignment_id: undefined,
       },
     ]);
   });
@@ -61,6 +66,10 @@ describe("createWarehouseNativeLoggerPlugin", () => {
       org_id: "org_1",
       project_id: "proj_1",
       env: "production",
+      type: "decision",
+      decision_id: undefined,
+      anonymous_id: undefined,
+      assignment_id: undefined,
     });
   });
 
@@ -97,6 +106,10 @@ describe("createWarehouseNativeLoggerPlugin", () => {
       orgId: "org_acme",
       projectId: "proj_web",
       env: "staging",
+      type: "exposure",
+      decisionId: "dec_abc",
+      anonymousId: "anon_xyz",
+      id: "asn_123",
     });
     createWarehouseNativeLoggerPlugin({
       destination: { type: "segment", analytics: { track } },
@@ -111,6 +124,10 @@ describe("createWarehouseNativeLoggerPlugin", () => {
       org_id: "org_acme",
       project_id: "proj_web",
       env: "staging",
+      type: "exposure",
+      decision_id: "dec_abc",
+      anonymous_id: "anon_xyz",
+      assignment_id: "asn_123",
     });
   });
 
@@ -132,6 +149,10 @@ describe("createWarehouseNativeLoggerPlugin", () => {
       org_id: "org_1",
       project_id: "proj_1",
       env: "production",
+      type: "decision",
+      decision_id: undefined,
+      anonymous_id: undefined,
+      assignment_id: undefined,
       cohort: "vip",
       score: 0.9,
     });

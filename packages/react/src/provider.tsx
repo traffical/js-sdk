@@ -140,6 +140,10 @@ export function TrafficalProvider({
           eventBatchSize: config.eventBatchSize,
           eventFlushIntervalMs: config.eventFlushIntervalMs,
           plugins: config.plugins,
+          assignmentLogger: config.assignmentLogger,
+          eventLogger: config.eventLogger,
+          disableCloudEvents: config.disableCloudEvents,
+          deduplicateAssignmentLogger: config.deduplicateAssignmentLogger,
         });
 
         clientRef.current = newClient;
@@ -190,6 +194,10 @@ export function TrafficalProvider({
     config.eventBatchSize,
     config.eventFlushIntervalMs,
     config.plugins,
+    config.assignmentLogger,
+    config.eventLogger,
+    config.disableCloudEvents,
+    config.deduplicateAssignmentLogger,
   ]);
 
   // Memoize context value

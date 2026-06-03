@@ -24,6 +24,8 @@ import {
   type ResolveOptions,
   type AssignmentLogger,
   type AssignmentType,
+  type TrackableEvent,
+  type TrackableEventLogger,
   type TrackEventMap,
   type OnSchemaWarnings,
   resolveParameters,
@@ -147,6 +149,14 @@ export interface TrafficalClientOptions {
   deduplicateAssignmentLogger?: boolean;
 
   /**
+   * Optional callback for routing full events (exposure, track, decision)
+   * to a customer-managed pipeline (e.g. Jitsu, Segment). Fires regardless
+   * of disableCloudEvents, so you can send to your own sink instead of (or
+   * in addition to) the Traffical edge.
+   */
+  eventLogger?: TrackableEventLogger;
+
+  /**
    * Callback for schema validation warnings from the edge.
    * Only fires when event schemas are defined and enforcement is "warn".
    * Recommended for development builds to surface schema violations.
@@ -207,6 +217,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _lifecycleProvider: LifecycleProvider;
   private readonly _decisionClient: DecisionClient | null;
   private readonly _assignmentLogger?: AssignmentLogger;
+  private readonly _byoEventLogger?: TrackableEventLogger;
   private readonly _disableCloudEvents: boolean;
   private readonly _assignmentLoggerDedup: ExposureDeduplicator | null;
   /** Cache of recent decisions for attribution lookup when track() is called */
@@ -298,13 +309,15 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
     // Warehouse-native options
     this._assignmentLogger = options.assignmentLogger;
+    this._byoEventLogger = options.eventLogger;
     this._disableCloudEvents = options.disableCloudEvents ?? false;
     this._assignmentLoggerDedup = (options.deduplicateAssignmentLogger !== false && options.assignmentLogger)
       ? new ExposureDeduplicator({ storage: this._storage, sessionTtlMs: options.exposureSessionTtlMs })
       : null;
 
-    // Register decision tracking plugin (enabled by default, skipped when cloud events disabled)
-    if (options.trackDecisions !== false && !this._disableCloudEvents) {
+    // Register decision tracking plugin (enabled by default). Skipped only when
+    // cloud events are disabled AND there is no BYO event logger to receive them.
+    if (options.trackDecisions !== false && (!this._disableCloudEvents || this._byoEventLogger)) {
       this._plugins.register({
         plugin: createDecisionTrackingPlugin(
           { deduplicationTtlMs: options.decisionDeduplicationTtlMs },
@@ -312,7 +325,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
             orgId: this._options.orgId,
             projectId: this._options.projectId,
             env: this._options.env,
-            log: (event: DecisionEvent) => this._eventLogger.log(event),
+            log: (event: DecisionEvent) => this._dispatchEvent(event),
           }
         ),
         priority: 100, // High priority so it runs before user plugins
@@ -594,9 +607,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
             continue;
           }
 
-          if (!this._disableCloudEvents) {
-            this._eventLogger.log(event);
-          }
+          this._dispatchEvent(event);
         }
       },
       undefined
@@ -657,9 +668,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
           return;
         }
 
-        if (!this._disableCloudEvents) {
-          this._eventLogger.log(event);
-        }
+        this._dispatchEvent(event);
       },
       undefined
     );
@@ -817,6 +826,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       } catch {
         // Ignore listener errors
       }
+    }
+  }
+
+  /**
+   * Routes a built event to the BYO event logger (if configured) and to the
+   * Traffical edge batcher (unless cloud events are disabled).
+   */
+  private _dispatchEvent(event: TrackableEvent): void {
+    if (this._byoEventLogger) {
+      try {
+        this._byoEventLogger(event);
+      } catch {
+        // Swallow BYO logger errors — they must not break SDK event handling.
+      }
+    }
+    if (!this._disableCloudEvents) {
+      this._eventLogger.log(event);
     }
   }
 

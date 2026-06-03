@@ -604,6 +604,12 @@ export interface AssignmentLogEntry {
 /** Callback type for routing assignment events to a customer-managed pipeline. */
 export type AssignmentLogger = (entry: AssignmentLogEntry) => void;
 
+/**
+ * Callback for routing full SDK events (exposure/track/decision) to a
+ * customer-managed pipeline (e.g. Jitsu, Segment, direct DB writes).
+ */
+export type TrackableEventLogger = (event: TrackableEvent) => void;
+
 // =============================================================================
 // Client Configuration Types
 // =============================================================================
@@ -653,6 +659,14 @@ export interface TrafficalClientOptions {
    * (same unit+policy+variant won't fire again). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
+
+  /**
+   * Optional callback for routing full events (exposure, track, decision)
+   * to a customer-managed pipeline (e.g. Jitsu, Segment). Fires regardless
+   * of disableCloudEvents, so you can send to your own sink instead of (or
+   * in addition to) the Traffical edge.
+   */
+  eventLogger?: TrackableEventLogger;
 }
 
 /**

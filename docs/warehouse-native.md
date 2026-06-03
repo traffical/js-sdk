@@ -76,6 +76,92 @@ When building assignment definitions in the Traffical dashboard, map your wareho
 
 ---
 
+## BYO event logging (`eventLogger`)
+
+While `assignmentLogger` emits structured **assignment rows**, the `eventLogger`
+callback receives the **full SDK events** — `exposure`, `track`, and `decision`
+— mirroring what would otherwise be sent to the Traffical edge. Use it when you
+want to route *all* product analytics (e.g. `add_to_cart`, `purchase`) plus
+experiment exposures into your own pipeline.
+
+```ts
+import type { TrackableEvent } from "@traffical/core";
+import { TrafficalClient } from "@traffical/js-client";
+
+const client = new TrafficalClient({
+  orgId: "org_...",
+  projectId: "prj_...",
+  env: "production",
+  apiKey: "...",
+  eventLogger: (event: TrackableEvent) => {
+    // event.type is "exposure" | "track" | "decision"
+  },
+  disableCloudEvents: true, // send to your sink instead of the edge
+});
+```
+
+Key behaviors:
+
+- Fires for `exposure` (from `trackExposure()`), `track` (from `track()`), and
+  `decision` (from `decide()`, when `trackDecisions` is enabled).
+- Fires **regardless of `disableCloudEvents`**, so you can send to your sink
+  instead of (with `disableCloudEvents: true`) or in addition to
+  (`disableCloudEvents: false`, dual-write) the Traffical edge.
+- Inherits the SDK's existing per-path dedup: exposures are deduplicated by the
+  exposure deduplicator, decisions by the decision deduplicator, and `track`
+  events are never deduplicated.
+
+`eventLogger` and `assignmentLogger` are independent — set either or both.
+
+---
+
+## Unified factory: Segment, RudderStack, Jitsu
+
+`createWarehouseNativeLogger` returns **both** loggers for a single destination,
+so you can wire them together:
+
+```ts
+import { TrafficalClient, createWarehouseNativeLogger } from "@traffical/js-client";
+
+const { assignmentLogger, eventLogger } = createWarehouseNativeLogger({
+  destination: { type: "segment", analytics },
+});
+
+const client = new TrafficalClient({
+  /* ... */
+  assignmentLogger,
+  eventLogger,
+});
+```
+
+Supported destinations: `segment`, `rudderstack`, `jitsu`, and `custom`.
+`createWarehouseNativeLoggerPlugin(...)` remains available as a back-compat
+shortcut that returns only the `assignmentLogger`.
+
+### Jitsu destination
+
+The `jitsu` destination builds Segment-compatible payloads and POSTs them over
+HTTP. By default the URL is `${host}/api/s/{type}` (client mode) or
+`${host}/api/s/s2s/{type}` (server-to-server). Provide `endpoint` to target your
+own proxy route, and `writeKey` to send the `X-Write-Key` header for s2s.
+
+```ts
+const { assignmentLogger, eventLogger } = createWarehouseNativeLogger({
+  destination: {
+    type: "jitsu",
+    host: "/api/jitsu",
+    mode: "s2s",
+    endpoint: (type) => `/api/jitsu/${type}`, // your server proxy route
+  },
+});
+```
+
+> **Security note:** the Jitsu server write key is a secret. From the browser,
+> POST to a server-side proxy that adds `X-Write-Key` (and, for s2s, fills
+> `context.ip` / `context.userAgent`) rather than embedding the key client-side.
+
+---
+
 ## Segment integration
 
 Use the built-in `createWarehouseNativeLoggerPlugin` helper to emit `analytics.track()` calls with warehouse-friendly `snake_case` property names:
@@ -226,8 +312,16 @@ The logger is **not** called when `unitKey` is missing from the decision metadat
 ## Type imports
 
 ```ts
-import type { AssignmentLogEntry, AssignmentLogger } from "@traffical/core";
-import { createWarehouseNativeLoggerPlugin } from "@traffical/js-client";
+import type {
+  AssignmentLogEntry,
+  AssignmentLogger,
+  TrackableEvent,
+  TrackableEventLogger,
+} from "@traffical/core";
+import {
+  createWarehouseNativeLogger,
+  createWarehouseNativeLoggerPlugin,
+} from "@traffical/js-client";
 ```
 
 ---

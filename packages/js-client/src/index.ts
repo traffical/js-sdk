@@ -77,7 +77,10 @@ export {
 // Export warehouse-native logger
 export {
   createWarehouseNativeLoggerPlugin,
+  createWarehouseNativeLogger,
   type WarehouseNativeLoggerOptions,
+  type JitsuDestination,
+  type AnalyticsLike,
 } from "./plugins/warehouse-native-logger.js";
 
 // Export debug plugin

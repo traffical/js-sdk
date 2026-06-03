@@ -56,6 +56,7 @@ export type {
   AssignmentLogEntry,
   AssignmentLogger,
   AssignmentType,
+  TrackableEventLogger,
   // Client types
   TrafficalClientOptions,
   GetParamsOptions,

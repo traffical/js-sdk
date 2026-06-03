@@ -77,6 +77,8 @@ export {
 export type {
   AssignmentLogEntry,
   AssignmentLogger,
+  TrackableEvent,
+  TrackableEventLogger,
 } from "@traffical/core";
 
 // =============================================================================
@@ -96,6 +98,7 @@ export {
   createDOMBindingPlugin,
   // Warehouse-native logger
   createWarehouseNativeLoggerPlugin,
+  createWarehouseNativeLogger,
 } from "@traffical/js-client";
 
 // =============================================================================

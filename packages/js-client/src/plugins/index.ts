@@ -237,7 +237,10 @@ export {
 
 export {
   createWarehouseNativeLoggerPlugin,
+  createWarehouseNativeLogger,
   type WarehouseNativeLoggerOptions,
+  type JitsuDestination,
+  type AnalyticsLike,
 } from "./warehouse-native-logger.js";
 
 export {

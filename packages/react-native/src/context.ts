@@ -1,6 +1,11 @@
 import { createContext, useContext } from "react";
 import type { TrafficalClient, TrafficalPlugin } from "@traffical/js-client";
-import type { ConfigBundle, Context } from "@traffical/core";
+import type {
+  ConfigBundle,
+  Context,
+  AssignmentLogger,
+  TrackableEventLogger,
+} from "@traffical/core";
 
 export interface TrafficalRNProviderConfig {
   orgId: string;
@@ -20,6 +25,15 @@ export interface TrafficalRNProviderConfig {
   exposureSessionTtlMs?: number;
 
   plugins?: TrafficalPlugin[];
+
+  /** BYO: route assignment events to a customer-managed pipeline. */
+  assignmentLogger?: AssignmentLogger;
+  /** BYO: route full events (exposure/track/decision) to a customer-managed pipeline. */
+  eventLogger?: TrackableEventLogger;
+  /** When true, do not send events to the Traffical control plane. Default: false. */
+  disableCloudEvents?: boolean;
+  /** When true, deduplicate assignment logger calls per session. Default: true. */
+  deduplicateAssignmentLogger?: boolean;
 
   eventBatchSize?: number;
   eventFlushIntervalMs?: number;

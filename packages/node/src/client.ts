@@ -26,6 +26,8 @@ import {
   type ServerResolveResponse,
   type AssignmentLogger,
   type AssignmentType,
+  type TrackableEvent,
+  type TrackableEventLogger,
   type TrackEventMap,
   type OnSchemaWarnings,
   resolveParameters,
@@ -112,6 +114,14 @@ export interface TrafficalClientOptions extends CoreClientOptions {
   deduplicateAssignmentLogger?: boolean;
 
   /**
+   * Optional callback for routing full events (exposure, track, decision)
+   * to a customer-managed pipeline (e.g. Jitsu, Segment). Fires regardless
+   * of disableCloudEvents, so you can send to your own sink instead of (or
+   * in addition to) the Traffical edge.
+   */
+  eventLogger?: TrackableEventLogger;
+
+  /**
    * Callback for schema validation warnings from the edge.
    * Only fires when event schemas are defined and enforcement is "warn".
    * Recommended for development builds to surface schema violations.
@@ -174,6 +184,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _decisionDedup: DecisionDeduplicator;
   private readonly _decisionClient: DecisionClient;
   private readonly _assignmentLogger?: AssignmentLogger;
+  private readonly _byoEventLogger?: TrackableEventLogger;
   private readonly _disableCloudEvents: boolean;
   /** In-memory LRU for assignment logger deduplication: key → expiry timestamp */
   private readonly _assignmentLoggerDedup: Map<string, number> | null;
@@ -235,6 +246,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
     // Warehouse-native options
     this._assignmentLogger = options.assignmentLogger;
+    this._byoEventLogger = options.eventLogger;
     this._disableCloudEvents = options.disableCloudEvents ?? false;
     this._assignmentLoggerDedup = (options.deduplicateAssignmentLogger !== false && options.assignmentLogger)
       ? new Map<string, number>()
@@ -397,25 +409,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     // Emit to assignment logger (separate from cloud events)
     this._emitAssignmentLogEntries(decision, "exposure");
 
-    if (!this._disableCloudEvents) {
-      const event: ExposureEvent = {
-        type: "exposure",
-        id: generateExposureId(),
-        decisionId: decision.decisionId,
-        orgId: this._options.orgId,
-        projectId: this._options.projectId,
-        env: this._options.env,
-        unitKey,
-        timestamp: new Date().toISOString(),
-        assignments: decision.assignments,
-        layers: decision.metadata.layers,
-        context: decision.metadata.filteredContext,
-        sdkName: SDK_NAME,
-        sdkVersion: SDK_VERSION,
-      };
+    const event: ExposureEvent = {
+      type: "exposure",
+      id: generateExposureId(),
+      decisionId: decision.decisionId,
+      orgId: this._options.orgId,
+      projectId: this._options.projectId,
+      env: this._options.env,
+      unitKey,
+      timestamp: new Date().toISOString(),
+      assignments: decision.assignments,
+      layers: decision.metadata.layers,
+      context: decision.metadata.filteredContext,
+      sdkName: SDK_NAME,
+      sdkVersion: SDK_VERSION,
+    };
 
-      this._eventBatcher.log(event);
-    }
+    this._dispatchEvent(event);
   }
 
   /**
@@ -441,26 +451,24 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     // Auto-populate attribution from cached decision if available
     const attribution = this._getAttributionFromCache(options?.decisionId);
 
-    if (!this._disableCloudEvents) {
-      const trackEvent: TrackEvent = {
-        type: "track",
-        id: generateTrackEventId(),
-        orgId: this._options.orgId,
-        projectId: this._options.projectId,
-        env: this._options.env,
-        unitKey: options?.unitKey || "",
-        timestamp: new Date().toISOString(),
-        event,
-        value,
-        properties,
-        decisionId: options?.decisionId,
-        attribution,
-        sdkName: SDK_NAME,
-        sdkVersion: SDK_VERSION,
-      };
+    const trackEvent: TrackEvent = {
+      type: "track",
+      id: generateTrackEventId(),
+      orgId: this._options.orgId,
+      projectId: this._options.projectId,
+      env: this._options.env,
+      unitKey: options?.unitKey || "",
+      timestamp: new Date().toISOString(),
+      event,
+      value,
+      properties,
+      decisionId: options?.decisionId,
+      attribution,
+      sdkName: SDK_NAME,
+      sdkVersion: SDK_VERSION,
+    };
 
-      this._eventBatcher.log(trackEvent);
-    }
+    this._dispatchEvent(trackEvent);
   }
 
   /**
@@ -621,6 +629,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   }
 
   /**
+   * Routes a built event to the BYO event logger (if configured) and to the
+   * Traffical edge batcher (unless cloud events are disabled).
+   */
+  private _dispatchEvent(event: TrackableEvent): void {
+    if (this._byoEventLogger) {
+      try {
+        this._byoEventLogger(event);
+      } catch {
+        // Swallow BYO logger errors — they must not break SDK event handling.
+      }
+    }
+    if (!this._disableCloudEvents) {
+      this._eventBatcher.log(event);
+    }
+  }
+
+  /**
    * Tracks a decision event (internal).
    * Called automatically when trackDecisions is enabled.
    */
@@ -629,7 +654,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     latencyMs: number,
     requestedParameters: string[]
   ): void {
-    if (this._disableCloudEvents) return;
+    if (this._disableCloudEvents && !this._byoEventLogger) return;
 
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) {
@@ -663,7 +688,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       sdkVersion: SDK_VERSION,
     };
 
-    this._eventBatcher.log(event);
+    this._dispatchEvent(event);
   }
 
   /**

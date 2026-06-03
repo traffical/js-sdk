@@ -59,6 +59,7 @@ export {
   type DOMBindingPlugin,
   type DOMBindingPluginOptions,
   createWarehouseNativeLoggerPlugin,
+  createWarehouseNativeLogger,
   type WarehouseNativeLoggerOptions,
 } from "@traffical/js-client";
 

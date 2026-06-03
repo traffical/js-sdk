@@ -12,6 +12,8 @@ import type {
   ParameterValue,
   TrackEventMap,
   TypedTrackFn,
+  AssignmentLogger,
+  TrackableEventLogger,
 } from "@traffical/core";
 
 // =============================================================================
@@ -93,6 +95,34 @@ export interface TrafficalProviderConfig {
    * The DecisionTrackingPlugin is included by default unless trackDecisions is false.
    */
   plugins?: TrafficalPlugin[];
+
+  // ==========================================================================
+  // Optional - Bring Your Own pipeline (warehouse-native)
+  // ==========================================================================
+
+  /**
+   * Optional callback for routing assignment events to a customer-managed
+   * pipeline (e.g. Segment, Rudderstack, direct DB writes).
+   */
+  assignmentLogger?: AssignmentLogger;
+
+  /**
+   * Optional callback for routing full events (exposure, track, decision)
+   * to a customer-managed pipeline (e.g. Jitsu, Segment). Fires regardless
+   * of disableCloudEvents.
+   */
+  eventLogger?: TrackableEventLogger;
+
+  /**
+   * When true, the SDK will NOT send events to the Traffical control plane.
+   * Config is still fetched from Traffical for flag evaluation. Default: false.
+   */
+  disableCloudEvents?: boolean;
+
+  /**
+   * When true, assignment logger calls are deduplicated per session. Default: true.
+   */
+  deduplicateAssignmentLogger?: boolean;
 
   // ==========================================================================
   // Optional - Event Batching

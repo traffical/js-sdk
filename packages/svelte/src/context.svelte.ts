@@ -82,6 +82,11 @@ function createTrafficalContextState(
       eventFlushIntervalMs: config.eventFlushIntervalMs,
       // Plugins
       plugins: config.plugins,
+      // BYO pipeline (warehouse-native)
+      assignmentLogger: config.assignmentLogger,
+      eventLogger: config.eventLogger,
+      disableCloudEvents: config.disableCloudEvents,
+      deduplicateAssignmentLogger: config.deduplicateAssignmentLogger,
     });
 
     client = clientInstance;
@@ -114,6 +119,11 @@ function createTrafficalContextState(
         storage,
         // Disable background operations on server
         refreshIntervalMs: 0,
+        // BYO pipeline (warehouse-native)
+        assignmentLogger: config.assignmentLogger,
+        eventLogger: config.eventLogger,
+        disableCloudEvents: config.disableCloudEvents,
+        deduplicateAssignmentLogger: config.deduplicateAssignmentLogger,
       });
       client = clientInstance;
       ready = true;

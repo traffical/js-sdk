@@ -1,5 +1,19 @@
 # @traffical/node
 
+## 0.7.0
+
+### Minor Changes
+
+- 0181040: Add BYO `eventLogger` for full exposure/track/decision events, expose warehouse-native options in Svelte/React/RN wrappers, and add `createWarehouseNativeLogger` with Jitsu destination support.
+- 0181040: Add eventLogger for full exposure/track/decision events, expose BYO
+
+### Patch Changes
+
+- Updated dependencies [0181040]
+- Updated dependencies [0181040]
+  - @traffical/core@0.9.0
+  - @traffical/core-io@0.5.3
+
 ## 0.6.0
 
 ### Minor Changes

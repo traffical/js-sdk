@@ -1,5 +1,16 @@
 # @traffical/core
 
+## 0.8.0
+
+### Minor Changes
+
+- 0a58b77: Add warehouse-native assignment fields to the BYO assignmentLogger.
+- 87b30d6: feat(sdk): add type, decisionId, anonymousId, id to assignmentLogger entries
+
+### Patch Changes
+
+- 96eb276: Canonicalize FNV-1a hashing over UTF-8 bytes for deterministic bucketing
+
 ## 0.7.0
 
 ### Minor Changes

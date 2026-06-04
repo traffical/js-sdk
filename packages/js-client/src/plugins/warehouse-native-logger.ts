@@ -96,9 +96,9 @@ function toAssignmentProps(entry: AssignmentLogEntry): Record<string, unknown> {
 function defaultEventName(event: TrackableEvent): string {
   switch (event.type) {
     case "exposure":
-      return "Experiment Exposure";
+      return "traffical_exposure";
     case "decision":
-      return "Experiment Decision";
+      return "traffical_decision";
     case "track":
     default:
       return event.event;

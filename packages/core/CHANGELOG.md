@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.10.0
+
+### Minor Changes
+
+- 24ffc0a: Switch deterministic assignment from FNV-1a to the SHA-256 v2 hash.
+
 ## 0.9.0
 
 ### Minor Changes

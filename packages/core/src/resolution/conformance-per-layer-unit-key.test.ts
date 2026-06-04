@@ -60,38 +60,38 @@ const expectedPerLayerUnitKey = {
       name: "both_keys_present",
       context: { userId: "user-abc", merchantId: "merchant-1" },
       expectedHashing: {
-        layer_user_ui: { bucket: 73 },
-        layer_merchant_pricing: { bucket: 628 },
+        layer_user_ui: { bucket: 641 },
+        layer_merchant_pricing: { bucket: 764 },
       },
-      expectedAssignments: { "ui.theme": "light", "pricing.merchantDiscount": 15 },
+      expectedAssignments: { "ui.theme": "dark", "pricing.merchantDiscount": 15 },
       expectedLayers: [
-        { layerId: "layer_user_ui", bucket: 73, policyId: "policy_ui_theme", allocationName: "control" },
-        { layerId: "layer_merchant_pricing", bucket: 628, policyId: "policy_merchant_discount", allocationName: "discount_15", unitKey: "merchantId", unitKeyValue: "merchant-1" },
+        { layerId: "layer_user_ui", bucket: 641, policyId: "policy_ui_theme", allocationName: "dark_mode" },
+        { layerId: "layer_merchant_pricing", bucket: 764, policyId: "policy_merchant_discount", allocationName: "discount_15", unitKey: "merchantId", unitKeyValue: "merchant-1" },
       ],
     },
     {
       name: "different_merchant_different_bucket",
       context: { userId: "user-xyz", merchantId: "merchant-42" },
       expectedHashing: {
-        layer_user_ui: { bucket: 314 },
-        layer_merchant_pricing: { bucket: 275 },
+        layer_user_ui: { bucket: 872 },
+        layer_merchant_pricing: { bucket: 542 },
       },
-      expectedAssignments: { "ui.theme": "light", "pricing.merchantDiscount": 0 },
+      expectedAssignments: { "ui.theme": "dark", "pricing.merchantDiscount": 15 },
       expectedLayers: [
-        { layerId: "layer_user_ui", bucket: 314, policyId: "policy_ui_theme", allocationName: "control" },
-        { layerId: "layer_merchant_pricing", bucket: 275, policyId: "policy_merchant_discount", allocationName: "no_discount", unitKey: "merchantId", unitKeyValue: "merchant-42" },
+        { layerId: "layer_user_ui", bucket: 872, policyId: "policy_ui_theme", allocationName: "dark_mode" },
+        { layerId: "layer_merchant_pricing", bucket: 542, policyId: "policy_merchant_discount", allocationName: "discount_15", unitKey: "merchantId", unitKeyValue: "merchant-42" },
       ],
     },
     {
       name: "merchant_key_missing",
       context: { userId: "user-abc" },
       expectedHashing: {
-        layer_user_ui: { bucket: 73 },
+        layer_user_ui: { bucket: 641 },
         layer_merchant_pricing: { bucket: -1 },
       },
-      expectedAssignments: { "ui.theme": "light", "pricing.merchantDiscount": 0 },
+      expectedAssignments: { "ui.theme": "dark", "pricing.merchantDiscount": 0 },
       expectedLayers: [
-        { layerId: "layer_user_ui", bucket: 73, policyId: "policy_ui_theme", allocationName: "control" },
+        { layerId: "layer_user_ui", bucket: 641, policyId: "policy_ui_theme", allocationName: "dark_mode" },
         { layerId: "layer_merchant_pricing", bucket: -1, unitKey: "merchantId", unitKeyValue: "" },
       ],
     },
@@ -100,12 +100,12 @@ const expectedPerLayerUnitKey = {
       context: { merchantId: "merchant-1" },
       expectedHashing: {
         layer_user_ui: { bucket: -1 },
-        layer_merchant_pricing: { bucket: 628 },
+        layer_merchant_pricing: { bucket: 764 },
       },
       expectedAssignments: { "ui.theme": "light", "pricing.merchantDiscount": 15 },
       expectedLayers: [
         { layerId: "layer_user_ui", bucket: -1 },
-        { layerId: "layer_merchant_pricing", bucket: 628, policyId: "policy_merchant_discount", allocationName: "discount_15", unitKey: "merchantId", unitKeyValue: "merchant-1" },
+        { layerId: "layer_merchant_pricing", bucket: 764, policyId: "policy_merchant_discount", allocationName: "discount_15", unitKey: "merchantId", unitKeyValue: "merchant-1" },
       ],
     },
     {

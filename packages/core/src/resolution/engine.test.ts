@@ -28,13 +28,13 @@ describe("resolveParameters", () => {
   const bundle = bundleBasic as unknown as ConfigBundle;
 
   test("resolves user-abc correctly", () => {
-    // Bucket 551 for layer_ui (treatment: 500-999)
-    // Bucket 913 for layer_pricing (no allocation: outside 0-599)
+    // Bucket 177 for layer_ui (control: 0-499)
+    // Bucket 902 for layer_pricing (no allocation: outside 0-599)
     const assignments = resolveParameters(bundle, { userId: "user-abc" }, basicDefaults);
 
-    expect(assignments["ui.primaryColor"]).toBe("#FF0000"); // treatment (bucket 551 >= 500)
+    expect(assignments["ui.primaryColor"]).toBe("#0000FF"); // control (bucket 177 < 500)
     expect(assignments["ui.buttonText"]).toBe("Click Me"); // default
-    expect(assignments["pricing.discount"]).toBe(0); // no allocation (bucket 913 >= 600)
+    expect(assignments["pricing.discount"]).toBe(0); // no allocation (bucket 902 >= 600)
   });
 
   test("resolves user-xyz correctly", () => {
@@ -48,13 +48,13 @@ describe("resolveParameters", () => {
   });
 
   test("resolves user-123 correctly", () => {
-    // Bucket 871 for layer_ui (treatment: 500-999)
-    // Bucket 177 for layer_pricing (discount_10: 0-299)
+    // Bucket 480 for layer_ui (control: 0-499)
+    // Bucket 738 for layer_pricing (no allocation: outside 0-599)
     const assignments = resolveParameters(bundle, { userId: "user-123" }, basicDefaults);
 
-    expect(assignments["ui.primaryColor"]).toBe("#FF0000"); // treatment (bucket 871 >= 500)
+    expect(assignments["ui.primaryColor"]).toBe("#0000FF"); // control (bucket 480 < 500)
     expect(assignments["ui.buttonText"]).toBe("Click Me"); // default
-    expect(assignments["pricing.discount"]).toBe(10); // discount_10 (bucket 177 in 0-299)
+    expect(assignments["pricing.discount"]).toBe(0); // no allocation (bucket 738 >= 600)
   });
 
   test("falls back to bundle param defaults when unit key is missing", () => {
@@ -87,7 +87,7 @@ describe("resolveParameters", () => {
     const assignments = resolveParameters(bundle, { userId: "user-abc" }, partialDefaults);
 
     expect(Object.keys(assignments)).toEqual(["ui.primaryColor"]);
-    expect(assignments["ui.primaryColor"]).toBe("#FF0000");
+    expect(assignments["ui.primaryColor"]).toBe("#0000FF");
   });
 });
 
@@ -178,8 +178,8 @@ describe("resolveParameters graceful degradation", () => {
 
     const result = resolveParameters(bundle, { userId: "user-abc" }, defaults);
 
-    // From bundle (overridden by policy) - bucket 551 = treatment
-    expect(result["ui.primaryColor"]).toBe("#FF0000");
+    // From bundle (overridden by policy) - bucket 177 = control
+    expect(result["ui.primaryColor"]).toBe("#0000FF");
     // From caller defaults (not in bundle)
     expect(result["ui.fontSize"]).toBe(16);
   });
@@ -206,7 +206,7 @@ describe("decide", () => {
     const decision = decide(bundle, { userId: "user-abc" }, basicDefaults);
 
     expect(decision.decisionId).toMatch(/^dec_/);
-    expect(decision.assignments["ui.primaryColor"]).toBe("#FF0000");
+    expect(decision.assignments["ui.primaryColor"]).toBe("#0000FF");
     expect(decision.metadata.unitKeyValue).toBe("user-abc");
     expect(decision.metadata.layers).toHaveLength(2);
   });
@@ -218,16 +218,16 @@ describe("decide", () => {
       (l) => l.layerId === "layer_ui"
     );
     expect(uiLayer).toBeDefined();
-    expect(uiLayer!.bucket).toBe(551);
+    expect(uiLayer!.bucket).toBe(177);
     expect(uiLayer!.policyId).toBe("policy_color_test");
-    expect(uiLayer!.allocationName).toBe("treatment");
+    expect(uiLayer!.allocationName).toBe("control");
 
     const pricingLayer = decision.metadata.layers.find(
       (l) => l.layerId === "layer_pricing"
     );
     expect(pricingLayer).toBeDefined();
-    expect(pricingLayer!.bucket).toBe(913);
-    // No allocation matched (bucket 913 is outside all ranges 0-599)
+    expect(pricingLayer!.bucket).toBe(902);
+    // No allocation matched (bucket 902 is outside all ranges 0-599)
     expect(pricingLayer!.policyId).toBeUndefined();
   });
 
@@ -287,7 +287,7 @@ describe("decide - attribution-only layers", () => {
     expect(uiLayer).toBeDefined();
     expect(uiLayer!.attributionOnly).toBeUndefined(); // has matching params
     expect(uiLayer!.policyId).toBe("policy_color_test");
-    expect(uiLayer!.allocationName).toBe("treatment");
+    expect(uiLayer!.allocationName).toBe("control");
 
     const pricingLayer = decision.metadata.layers.find(
       (l) => l.layerId === "layer_pricing"
@@ -295,7 +295,7 @@ describe("decide - attribution-only layers", () => {
     expect(pricingLayer).toBeDefined();
     expect(pricingLayer!.attributionOnly).toBe(true); // no matching params
     // Still resolved for attribution: bucket computed, policy matched
-    expect(pricingLayer!.bucket).toBe(913);
+    expect(pricingLayer!.bucket).toBe(902);
   });
 
   test("empty defaults produces all layers as attributionOnly", () => {
@@ -311,9 +311,9 @@ describe("decide - attribution-only layers", () => {
     const uiLayer = decision.metadata.layers.find(
       (l) => l.layerId === "layer_ui"
     );
-    expect(uiLayer!.bucket).toBe(551);
+    expect(uiLayer!.bucket).toBe(177);
     expect(uiLayer!.policyId).toBe("policy_color_test");
-    expect(uiLayer!.allocationName).toBe("treatment");
+    expect(uiLayer!.allocationName).toBe("control");
   });
 
   test("empty defaults does NOT modify assignments", () => {
@@ -325,7 +325,7 @@ describe("decide - attribution-only layers", () => {
 
   test("attribution-only layers do not apply parameter overrides", () => {
     // Request only ui params. pricing layer should NOT apply overrides
-    // even though user-xyz has bucket 42 which matches discount_10.
+    // even though user-xyz has bucket 141 which matches discount_10.
     const decision = decide(bundle, { userId: "user-xyz" }, {
       "ui.primaryColor": "#FFFFFF",
     });
@@ -340,7 +340,7 @@ describe("decide - attribution-only layers", () => {
       (l) => l.layerId === "layer_pricing"
     );
     expect(pricingLayer!.attributionOnly).toBe(true);
-    expect(pricingLayer!.bucket).toBe(42);
+    expect(pricingLayer!.bucket).toBe(141);
     expect(pricingLayer!.policyId).toBe("policy_discount");
     expect(pricingLayer!.allocationName).toBe("discount_10");
   });
@@ -366,7 +366,7 @@ describe("decide - attribution-only layers", () => {
     );
     expect(uiLayer!.attributionOnly).toBe(true);
     // Still resolved: bucket + policy matching happened
-    expect(uiLayer!.bucket).toBe(214);
+    expect(uiLayer!.bucket).toBe(443);
     expect(uiLayer!.policyId).toBe("policy_color_test");
     expect(uiLayer!.allocationName).toBe("control");
 

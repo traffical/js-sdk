@@ -64,7 +64,6 @@ export {
   evaluateCondition,
   evaluateConditions,
   // Hashing utilities
-  fnv1a,
   computeBucket,
   isInBucketRange,
   // ID generation

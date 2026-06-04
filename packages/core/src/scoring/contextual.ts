@@ -9,7 +9,7 @@
  *   1. Compute linear score per allocation: intercept + SUM(coef * feature)
  *   2. Apply softmax with gamma temperature to get probabilities
  *   3. Enforce action probability floor (minimum exploration)
- *   4. Deterministic weighted selection via FNV-1a hash
+ *   4. Deterministic weighted selection via SHA-256 v2 hash
  */
 
 import type {

@@ -2,15 +2,19 @@
  * Bucket Computation
  *
  * Deterministic bucket assignment for traffic splitting.
- * The bucket is computed as: hash(unitKeyValue + ":" + layerId) % bucketCount
+ * The bucket is computed from the SHA-256 v2 assignment hash:
+ *   digest  = SHA256(assignmentInput(unitKeyValue, layerId))
+ *   hashInt = first 64 bits of digest, unsigned big-endian
+ *   bucket  = hashInt % bucketCount
  *
  * This ensures:
  * - Same user always gets same bucket for a given layer
- * - Different layers can have independent bucketing (orthogonality)
+ * - Different layers have independent bucketing (orthogonality) — SHA-256's
+ *   avalanche behaviour passes cross-experiment independence where FNV-1a did not
  * - Deterministic results across SDK and server
  */
 
-import { fnv1a } from "./fnv1a.js";
+import { assignmentInput, sha256Digest, hash64BE } from "./assignment-hash.js";
 
 /**
  * Computes the bucket for a given unit and layer.
@@ -25,14 +29,9 @@ export function computeBucket(
   layerId: string,
   bucketCount: number
 ): number {
-  // Concatenate unit key and layer ID with separator
-  const input = `${unitKeyValue}:${layerId}`;
-
-  // Use FNV-1a for consistent hashing
-  const hash = fnv1a(input);
-
-  // Map to bucket range
-  return hash % bucketCount;
+  const digest = sha256Digest(assignmentInput(unitKeyValue, layerId));
+  const hashInt = hash64BE(digest);
+  return Number(hashInt % BigInt(bucketCount));
 }
 
 /**

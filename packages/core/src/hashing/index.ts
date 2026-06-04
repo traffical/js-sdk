@@ -2,9 +2,17 @@
  * Hashing Module
  *
  * Exports all hashing-related functions for deterministic bucket assignment.
+ * The canonical hash is the SHA-256 v2 assignment hash (see assignment-hash.ts).
  */
 
-export { fnv1a } from "./fnv1a.js";
+export {
+  assignmentInput,
+  sha256Digest,
+  hash64BE,
+  hashInt64,
+  utf8ByteLength,
+  ASSIGNMENT_HASH_VERSION,
+} from "./assignment-hash.js";
 export {
   computeBucket,
   isInBucketRange,
@@ -13,4 +21,3 @@ export {
   createBucketRanges,
 } from "./bucket.js";
 export { weightedSelection } from "./weighted.js";
-

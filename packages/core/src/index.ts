@@ -6,7 +6,7 @@
  *
  * Key features:
  * - Deterministic parameter resolution
- * - FNV-1a hashing for bucket assignment
+ * - SHA-256 v2 hashing for bucket assignment
  * - Condition evaluation for targeting
  * - Defaults-based graceful degradation
  */
@@ -73,7 +73,12 @@ export type {
 
 // Hashing
 export {
-  fnv1a,
+  assignmentInput,
+  sha256Digest,
+  hash64BE,
+  hashInt64,
+  utf8ByteLength,
+  ASSIGNMENT_HASH_VERSION,
   computeBucket,
   isInBucketRange,
   findMatchingAllocation,

@@ -52,7 +52,7 @@ layers with matching parameters.
 
 The layer processing loop now iterates **all** layers in `bundle.layers`:
 
-- **Bucket computation** always runs (FNV-1a hash, negligible cost).
+- **Bucket computation** always runs (SHA-256 v2 hash, negligible cost).
 - **Policy matching** always runs (bucket eligibility, conditions, allocation
   matching).
 - **Parameter overrides** are only applied if the layer has matching parameters
@@ -113,8 +113,8 @@ saw the variant" (exposure) using the event type and the `attributionOnly` flag.
 
 ## Performance
 
-The change adds bucket computation (FNV-1a) and policy matching for previously
-skipped layers. FNV-1a is ~nanoseconds per call. Condition evaluation
+The change adds bucket computation (SHA-256 v2) and policy matching for previously
+skipped layers. SHA-256 is ~microseconds per call. Condition evaluation
 short-circuits on first miss. Even with 100 layers, the overhead is negligible
 compared to network I/O for fetching the bundle.
 

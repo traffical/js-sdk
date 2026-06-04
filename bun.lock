@@ -10,22 +10,23 @@
     },
     "packages/core": {
       "name": "@traffical/core",
-      "version": "0.6.0",
+      "version": "0.9.0",
       "dependencies": {
+        "@noble/hashes": "^2.2.0",
         "nanoid": "^5.0.9",
         "ulid": "^2.3.0",
       },
       "devDependencies": {
-        "@traffical/sdk-spec": "^0.4.0",
+        "@traffical/sdk-spec": "^0.5.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
     },
     "packages/core-io": {
       "name": "@traffical/core-io",
-      "version": "0.5.0",
+      "version": "0.5.3",
       "dependencies": {
-        "@traffical/core": "0.3.0",
+        "@traffical/core": "0.9.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -34,10 +35,10 @@
     },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.11.0",
+      "version": "0.13.0",
       "dependencies": {
-        "@traffical/core": "0.3.0",
-        "@traffical/core-io": "0.3.0",
+        "@traffical/core": "0.9.0",
+        "@traffical/core-io": "0.5.3",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -47,10 +48,10 @@
     },
     "packages/node": {
       "name": "@traffical/node",
-      "version": "0.5.0",
+      "version": "0.7.0",
       "dependencies": {
-        "@traffical/core": "0.2.3",
-        "@traffical/core-io": "0.1.0",
+        "@traffical/core": "0.9.0",
+        "@traffical/core-io": "0.5.3",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -59,10 +60,10 @@
     },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
-        "@traffical/core": "workspace:^",
-        "@traffical/js-client": "workspace:^",
+        "@traffical/core": "0.9.0",
+        "@traffical/js-client": "0.13.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -75,10 +76,10 @@
     },
     "packages/react-native": {
       "name": "@traffical/react-native",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
-        "@traffical/core": "0.3.0",
-        "@traffical/js-client": "0.3.0",
+        "@traffical/core": "0.9.0",
+        "@traffical/js-client": "0.13.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -93,11 +94,11 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
-        "@traffical/core": "workspace:^",
-        "@traffical/js-client": "workspace:^",
-        "@traffical/node": "workspace:^",
+        "@traffical/core": "0.9.0",
+        "@traffical/js-client": "0.13.0",
+        "@traffical/node": "0.7.0",
       },
       "devDependencies": {
         "@sveltejs/package": "^2.3.0",
@@ -294,6 +295,8 @@
 
     "@manypkg/get-packages": ["@manypkg/get-packages@1.1.3", "", { "dependencies": { "@babel/runtime": "^7.5.5", "@changesets/types": "^4.0.1", "@manypkg/find-root": "^1.1.0", "fs-extra": "^8.1.0", "globby": "^11.0.0", "read-yaml-file": "^1.1.0" } }, "sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A=="],
 
+    "@noble/hashes": ["@noble/hashes@2.2.0", "", {}, "sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg=="],
+
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
@@ -344,7 +347,7 @@
 
     "@traffical/react-native": ["@traffical/react-native@workspace:packages/react-native"],
 
-    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.4.0", "", {}, "sha512-KvgiELcHpNNEs14Vmm07YfA9wNdXknyegk3qVvcOMuF9sQ+xWscZnsEkSXPwvX5qXtjSjBp46yc+MoNpM7z5SQ=="],
+    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.5.0", "", {}, "sha512-lwFkuqXhXkOcn1SOWDArZJEJA+CfESlYDb37KZdvSpyfkggxpRYbBnBqRpSq5m6QpSZBb2uHGV7JyqqLjSH7tg=="],
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 
@@ -954,18 +957,6 @@
 
     "@manypkg/get-packages/fs-extra": ["fs-extra@8.1.0", "", { "dependencies": { "graceful-fs": "^4.2.0", "jsonfile": "^4.0.0", "universalify": "^0.1.0" } }, "sha512-yhlQgA6mnOJUKOsRUFsgJdQCvkKhcz8tlZG5HBQfReYZy46OwLcY+Zia0mtdHsOo9y/hP+CxMN0TU9QxoOtG4g=="],
 
-    "@traffical/core-io/@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
-
-    "@traffical/js-client/@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
-
-    "@traffical/node/@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
-
-    "@traffical/react/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
-
-    "@traffical/react-native/@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
-
-    "@traffical/svelte/@types/bun": ["@types/bun@1.3.6", "", { "dependencies": { "bun-types": "1.3.6" } }, "sha512-uWCv6FO/8LcpREhenN1d1b6fcspAB+cefwD7uti8C8VffIv0Um08TKMn98FynpTiU38+y2dUO55T11NgDt8VAA=="],
-
     "anymatch/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
 
     "chalk/ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg=="],
@@ -1015,18 +1006,6 @@
     "write-file-atomic/signal-exit": ["signal-exit@3.0.7", "", {}, "sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ=="],
 
     "@istanbuljs/load-nyc-config/js-yaml/argparse": ["argparse@1.0.10", "", { "dependencies": { "sprintf-js": "~1.0.2" } }, "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg=="],
-
-    "@traffical/core-io/@types/bun/bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
-
-    "@traffical/js-client/@types/bun/bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
-
-    "@traffical/node/@types/bun/bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
-
-    "@traffical/react-native/@types/bun/bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
-
-    "@traffical/react/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
-
-    "@traffical/svelte/@types/bun/bun-types": ["bun-types@1.3.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-OlFwHcnNV99r//9v5IIOgQ9Uk37gZqrNMCcqEaExdkVq3Avwqok1bJFmvGMCkCE0FqzdY8VMOZpfpR3lwI+CsQ=="],
 
     "connect/debug/ms": ["ms@2.0.0", "", {}, "sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A=="],
 

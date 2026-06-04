@@ -1,5 +1,19 @@
 # @traffical/svelte
 
+## 0.6.0
+
+### Minor Changes
+
+- 24ffc0a: Switch deterministic assignment from FNV-1a to the SHA-256 v2 hash.
+
+### Patch Changes
+
+- Updated dependencies [24ffc0a]
+- Updated dependencies [cc6f894]
+  - @traffical/core@0.10.0
+  - @traffical/js-client@0.14.0
+  - @traffical/node@0.8.0
+
 ## 0.5.0
 
 ### Minor Changes

@@ -208,13 +208,13 @@ describe("createWarehouseNativeLogger", () => {
     expect(typeof eventLogger).toBe("function");
   });
 
-  test("Segment eventLogger: exposure -> 'Experiment Exposure'", () => {
+  test("Segment eventLogger: exposure -> 'traffical_exposure'", () => {
     const track = mock(() => {});
     const { eventLogger } = createWarehouseNativeLogger({
       destination: { type: "segment", analytics: { track } },
     });
     eventLogger(sampleExposure());
-    expect(track.mock.calls[0]?.[0]).toBe("Experiment Exposure");
+    expect(track.mock.calls[0]?.[0]).toBe("traffical_exposure");
     expect(track.mock.calls[0]?.[1]).toMatchObject({
       unit_key: "u1",
       type: "exposure",

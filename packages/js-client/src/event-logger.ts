@@ -16,6 +16,7 @@ import type { LifecycleProvider, VisibilityState } from "./lifecycle.js";
 const FAILED_EVENTS_KEY = "failed_events";
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000; // 30 seconds
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 const MAX_FAILED_EVENTS = 100;
 
 export interface EventLoggerOptions {
@@ -31,6 +32,12 @@ export interface EventLoggerOptions {
   batchSize?: number;
   /** Auto-flush interval in ms (default: 30000) */
   flushIntervalMs?: number;
+  /**
+   * Timeout in ms for the event batch POST (default: 10000).
+   * On timeout the request is aborted and treated like a failed send:
+   * events are persisted to storage for retry.
+   */
+  requestTimeoutMs?: number;
   /** Callback on flush error */
   onError?: (error: Error) => void;
   /** Callback when schema validation warnings are received from the edge (dev-mode) */
@@ -43,6 +50,7 @@ export class EventLogger {
   private _storage: StorageProvider;
   private _batchSize: number;
   private _flushIntervalMs: number;
+  private _requestTimeoutMs: number;
   private _onError?: (error: Error) => void;
   private _onSchemaWarnings?: OnSchemaWarnings;
 
@@ -58,6 +66,7 @@ export class EventLogger {
     this._storage = options.storage;
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
+    this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this._onError = options.onError;
     this._onSchemaWarnings = options.onSchemaWarnings;
     this._lifecycleProvider = options.lifecycleProvider;
@@ -133,7 +142,9 @@ export class EventLogger {
     this._queue = [];
 
     // Use fetch with keepalive instead of sendBeacon
-    // This allows us to include the Authorization header
+    // This allows us to include the Authorization header.
+    // Intentionally no abort timeout here: keepalive requests are meant to
+    // outlive the page, and a timer may never fire during unload anyway.
     fetch(this._endpoint, {
       method: "POST",
       headers: {
@@ -169,14 +180,25 @@ export class EventLogger {
   }
 
   private async _sendEvents(events: TrackableEvent[]): Promise<void> {
-    const response = await fetch(this._endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this._apiKey}`,
-      },
-      body: JSON.stringify({ events }),
-    });
+    // Abort the request if the edge hangs so the flush settles and events
+    // go down the persist-for-retry path (same as any network failure).
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this._requestTimeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(this._endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this._apiKey}`,
+        },
+        body: JSON.stringify({ events }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

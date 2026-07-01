@@ -19,7 +19,7 @@
     "build": "bun run generate-version && tsc",
     "generate-version": "bun run ../../scripts/generate-version.ts",
     "dev": "tsc --watch",
-    "test": "echo 'No tests yet'",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

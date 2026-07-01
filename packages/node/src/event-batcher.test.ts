@@ -171,3 +171,93 @@ describe("EventBatcher schema warnings", () => {
     await batcher.destroy();
   });
 });
+
+describe("EventBatcher request timeout", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  /** A fetch stub that never resolves, but rejects with AbortError when its signal aborts. */
+  function installHangingFetch(): void {
+    globalThis.fetch = mock(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })
+    ) as unknown as typeof fetch;
+  }
+
+  test("aborts a hung event POST after requestTimeoutMs and re-queues events for retry", async () => {
+    installHangingFetch();
+
+    const errors: Error[] = [];
+
+    const batcher = new EventBatcher({
+      endpoint: "https://test.example.com/v1/events/batch",
+      apiKey: "pk_test",
+      batchSize: 100,
+      flushIntervalMs: 999999,
+      requestTimeoutMs: 20,
+      onError: (error) => {
+        errors.push(error);
+      },
+    });
+
+    batcher.log(createTrackEvent());
+    // Without the abort timeout this would never settle.
+    await batcher.flush();
+
+    // Same behavior as a failed send: error surfaced, events re-queued for retry.
+    expect(errors).toHaveLength(1);
+    expect(
+      errors[0].name === "AbortError" || errors[0].message.toLowerCase().includes("abort")
+    ).toBe(true);
+    expect(batcher.queueSize).toBe(1);
+
+    batcher.destroySync();
+  });
+
+  test("fast response is unaffected and the abort timer is cleaned up", async () => {
+    let capturedSignal: AbortSignal | null | undefined;
+    globalThis.fetch = mock((_url: string, init?: RequestInit) => {
+      capturedSignal = init?.signal;
+      return Promise.resolve(
+        new Response(JSON.stringify({ accepted: 1 }), { status: 200 })
+      );
+    }) as unknown as typeof fetch;
+
+    const errors: Error[] = [];
+
+    const batcher = new EventBatcher({
+      endpoint: "https://test.example.com/v1/events/batch",
+      apiKey: "pk_test",
+      batchSize: 100,
+      flushIntervalMs: 999999,
+      requestTimeoutMs: 20,
+      onError: (error) => {
+        errors.push(error);
+      },
+    });
+
+    batcher.log(createTrackEvent());
+    await batcher.flush();
+
+    // Wait past the timeout: if the timer had leaked, the signal would abort.
+    await new Promise((r) => setTimeout(r, 60));
+
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal?.aborted).toBe(false);
+    expect(errors).toHaveLength(0);
+    expect(batcher.queueSize).toBe(0);
+
+    await batcher.destroy();
+  });
+});

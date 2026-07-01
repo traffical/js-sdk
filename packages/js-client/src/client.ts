@@ -60,6 +60,7 @@ const SDK_NAME = "js-client";
 
 const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 const OFFLINE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
 const DECISION_CACHE_MAX_SIZE = 100; // Max decisions to cache for attribution lookup
 
@@ -82,6 +83,15 @@ export interface TrafficalClientOptions {
   localConfig?: ConfigBundle;
   /** Refresh interval in milliseconds (default: 60000) */
   refreshIntervalMs?: number;
+  /**
+   * Timeout in milliseconds for SDK network requests — the config bundle
+   * fetch and event batch POSTs (default: 10000).
+   *
+   * On timeout the request is aborted and treated exactly like a network
+   * failure: config fetches fall back to the cached/local config, and event
+   * batches are persisted for retry.
+   */
+  requestTimeoutMs?: number;
   /** Error boundary options */
   errorBoundary?: ErrorBoundaryOptions;
   /** Event batching options */
@@ -216,6 +226,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _plugins: PluginManager;
   private readonly _lifecycleProvider: LifecycleProvider;
   private readonly _decisionClient: DecisionClient | null;
+  private readonly _requestTimeoutMs: number;
   private readonly _assignmentLogger?: AssignmentLogger;
   private readonly _byoEventLogger?: TrackableEventLogger;
   private readonly _disableCloudEvents: boolean;
@@ -247,6 +258,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       attributionMode: options.attributionMode ?? "cumulative",
       evaluationMode,
     };
+    this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     // Create DecisionClient when needed (server mode, or bundle mode may use for edge policies)
     const decisionClientConfig: DecisionClientConfig = {
@@ -290,6 +302,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       lifecycleProvider: this._lifecycleProvider,
       batchSize: options.eventBatchSize,
       flushIntervalMs: options.eventFlushIntervalMs,
+      requestTimeoutMs: options.requestTimeoutMs,
       onError: (error) => {
         console.warn("[Traffical] Event logging error:", error.message);
       },
@@ -928,8 +941,17 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       headers["If-None-Match"] = this._state.etag;
     }
 
+    // Abort the request if the edge hangs (slow TCP, not a 5xx) so the
+    // promise settles and we fall back to cached/local config.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this._requestTimeoutMs);
+
     try {
-      const response = await fetch(url, { method: "GET", headers });
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
 
       if (response.status === 304) {
         this._state.lastFetchTime = Date.now();
@@ -959,6 +981,8 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       this._plugins.runConfigUpdate(bundle);
     } catch (error) {
       this._logOfflineWarning(error);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

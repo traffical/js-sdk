@@ -17,6 +17,7 @@ import type { TrackableEvent, OnSchemaWarnings, EventBatchResponse } from "@traf
 
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000; // 30 seconds
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 
 /**
  * Options for EventBatcher.
@@ -30,6 +31,12 @@ export interface EventBatcherOptions {
   batchSize?: number;
   /** Auto-flush interval in ms (default: 30000) */
   flushIntervalMs?: number;
+  /**
+   * Timeout in ms for the event batch POST (default: 10000).
+   * On timeout the request is aborted and treated like a failed send:
+   * events are re-queued for retry.
+   */
+  requestTimeoutMs?: number;
   /** Callback on flush error */
   onError?: (error: Error) => void;
   /** Enable debug logging */
@@ -43,6 +50,7 @@ export class EventBatcher {
   private readonly _apiKey: string;
   private readonly _batchSize: number;
   private readonly _flushIntervalMs: number;
+  private readonly _requestTimeoutMs: number;
   private readonly _onError?: (error: Error) => void;
   private readonly _onSchemaWarnings?: OnSchemaWarnings;
   private readonly _debug: boolean;
@@ -57,6 +65,7 @@ export class EventBatcher {
     this._apiKey = options.apiKey;
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
+    this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this._onError = options.onError;
     this._onSchemaWarnings = options.onSchemaWarnings;
     this._debug = options.debug ?? false;
@@ -171,14 +180,25 @@ export class EventBatcher {
   }
 
   private async _sendEvents(events: TrackableEvent[]): Promise<void> {
-    const response = await fetch(this._endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this._apiKey}`,
-      },
-      body: JSON.stringify({ events }),
-    });
+    // Abort the request if the edge hangs so the flush settles and events
+    // go down the re-queue-for-retry path (same as any network failure).
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this._requestTimeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(this._endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this._apiKey}`,
+        },
+        body: JSON.stringify({ events }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

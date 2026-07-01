@@ -1,5 +1,13 @@
 # @traffical/svelte
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [a1760ff]
+  - @traffical/js-client@0.15.0
+  - @traffical/node@0.9.0
+
 ## 0.6.0
 
 ### Minor Changes

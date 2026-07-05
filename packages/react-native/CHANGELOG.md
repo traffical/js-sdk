@@ -1,5 +1,12 @@
 # @traffical/react-native
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies [a1760ff]
+  - @traffical/js-client@0.15.0
+
 ## 0.7.0
 
 ### Minor Changes

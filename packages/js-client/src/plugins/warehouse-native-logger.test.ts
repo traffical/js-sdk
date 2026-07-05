@@ -117,6 +117,10 @@ describe("createWarehouseNativeLoggerPlugin", () => {
       decisionId: "dec_abc",
       anonymousId: "anon_xyz",
       id: "asn_123",
+      bucket: 512,
+      probability: 0.25,
+      modelVersion: "2025-06-10T08:00:00.000Z",
+      configVersion: "2025-06-14T00:00:00.000Z",
     });
     createWarehouseNativeLoggerPlugin({
       destination: { type: "segment", analytics: { track } },
@@ -135,6 +139,12 @@ describe("createWarehouseNativeLoggerPlugin", () => {
       decision_id: "dec_abc",
       anonymous_id: "anon_xyz",
       assignment_id: "asn_123",
+      // Warehouse-native passthrough: probability → propensity (matches the
+      // PHP WarehouseNativeLogger row shape).
+      bucket: 512,
+      propensity: 0.25,
+      model_version: "2025-06-10T08:00:00.000Z",
+      config_version: "2025-06-14T00:00:00.000Z",
     });
   });
 

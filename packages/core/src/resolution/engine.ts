@@ -27,7 +27,7 @@ import type {
 import { computeBucket, findMatchingAllocation } from "../hashing/bucket.js";
 import { weightedSelection } from "../hashing/weighted.js";
 import { evaluateConditions } from "./conditions.js";
-import { resolveContextualPolicy } from "../scoring/contextual.js";
+import { resolveContextualPolicyDetailed } from "../scoring/contextual.js";
 import { generateDecisionId } from "../ids/index.js";
 
 /**
@@ -149,14 +149,15 @@ function getEntityWeights(
  * @param policy - The policy with entityConfig
  * @param context - The evaluation context
  * @param unitKeyValue - The unit key value for hashing
- * @returns The selected allocation and entity ID, or null if cannot resolve
+ * @returns The selected allocation, its selection weight, and entity ID,
+ *   or null if cannot resolve
  */
 function resolvePerEntityPolicy(
   bundle: ConfigBundle,
   policy: BundlePolicy,
   context: Context,
   unitKeyValue: string
-): { allocation: BundleAllocation; entityId: string } | null {
+): { allocation: BundleAllocation; weight: number; entityId: string } | null {
   const entityConfig = policy.entityConfig;
   if (!entityConfig) return null;
 
@@ -205,6 +206,9 @@ function resolvePerEntityPolicy(
 
   return {
     allocation: allocations[selectedIndex],
+    // The weight the SDK actually used at decision time — logged as the
+    // propensity of the chosen allocation for off-policy training.
+    weight: weights[selectedIndex],
     entityId,
   };
 }
@@ -360,6 +364,12 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
 
     let matchedPolicy: BundlePolicy | undefined;
     let matchedAllocation: BundleAllocation | undefined;
+    // Propensity of the chosen allocation at decision time (adaptive
+    // policies only — omitted for static policies and edge-resolved
+    // per-entity policies where the SDK didn't compute the selection).
+    let matchedProbability: number | undefined;
+    // Model version for linear_contextual selections.
+    let matchedModelVersion: string | undefined;
 
     // Find matching policy
     for (const policy of layer.policies) {
@@ -378,13 +388,21 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
 
       // Contextual model scoring: overrides bucket-based allocation
       if (policy.contextualModel) {
-        const ctxAllocation = resolveContextualPolicy(policy, context, layerUnitValue);
-        if (ctxAllocation) {
+        const ctxResolution = resolveContextualPolicyDetailed(policy, context, layerUnitValue);
+        if (ctxResolution) {
           matchedPolicy = policy;
-          matchedAllocation = ctxAllocation;
+          matchedAllocation = ctxResolution.allocation;
+          matchedProbability = ctxResolution.probability;
+          // Model timestamp of the coefficients used: prefer the bundle
+          // model's generatedAt, then its modelVersion alias, then the
+          // policy stateVersion (bumped whenever the model is retrained).
+          matchedModelVersion =
+            policy.contextualModel.generatedAt ??
+            policy.contextualModel.modelVersion ??
+            policy.stateVersion;
           matchedPolicies.push(policy);
           if (hasParams) {
-            for (const [key, value] of Object.entries(ctxAllocation.overrides)) {
+            for (const [key, value] of Object.entries(ctxResolution.allocation.overrides)) {
               if (key in assignments) {
                 assignments[key] = value;
               }
@@ -400,6 +418,8 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
         if (result) {
           matchedPolicy = policy;
           matchedAllocation = result.allocation;
+          // The entity weight the SDK actually used for weighted selection.
+          matchedProbability = result.weight;
 
           // Track matched policy for context filtering
           matchedPolicies.push(policy);
@@ -457,6 +477,15 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
           matchedPolicy = policy;
           matchedAllocation = allocation;
 
+          // For adaptive (bandit) policies the bucket-range share IS the
+          // selection probability at decision time. Static policies omit
+          // the field — their assignment is a fixed split, not a propensity.
+          if (policy.kind === "adaptive") {
+            const [rangeStart, rangeEnd] = allocation.bucketRange;
+            matchedProbability =
+              (rangeEnd - rangeStart + 1) / bundle.hashing.bucketCount;
+          }
+
           // Track matched policy for context filtering
           matchedPolicies.push(policy);
 
@@ -481,6 +510,17 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       allocationId: matchedAllocation?.id,
       allocationName: matchedAllocation?.name,
       allocationKey: (matchedAllocation as any)?.key,
+      // Propensity of the chosen allocation (adaptive policies only) and
+      // the contextual model version — logged for off-policy training.
+      // The events schema requires probability in (0, 1]; omit out-of-range
+      // values (e.g. the zero-weight fallback of weightedSelection or an
+      // inconsistent bucketCount) rather than clamping.
+      ...(matchedProbability !== undefined &&
+      matchedProbability > 0 &&
+      matchedProbability <= 1
+        ? { probability: matchedProbability }
+        : {}),
+      ...(matchedModelVersion !== undefined ? { modelVersion: matchedModelVersion } : {}),
       // Record the unit key only when the layer overrides the project
       // default — keeps the metadata small for the single-entity case while
       // making exposure events auditable in multi-entity projects.
@@ -556,6 +596,9 @@ export function decide<T extends Record<string, ParameterValue>>(
       unitKeyValue,
       layers,
       filteredContext,
+      // Snapshot the bundle version at decision time so events built later
+      // stamp the version this decision was actually evaluated against.
+      ...(bundle?.version ? { configVersion: bundle.version } : {}),
     },
   };
 }

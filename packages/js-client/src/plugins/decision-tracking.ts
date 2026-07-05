@@ -51,6 +51,13 @@ export interface DecisionTrackingPluginDeps {
    * This is typically the EventLogger.log() method.
    */
   log: (event: DecisionEvent) => void;
+  /**
+   * Returns the CURRENT config bundle version. Used only as a fallback for
+   * `configVersion` when the decision metadata lacks a decision-time
+   * snapshot (e.g. decisions produced by an older core).
+   * This is typically the client's getConfigVersion() method.
+   */
+  getConfigVersion?: () => string | null;
 }
 
 /**
@@ -119,6 +126,10 @@ export function createDecisionTrackingPlugin(
         layers: decision.metadata.layers,
         // Include filtered context if available (for contextual bandit training)
         context: decision.metadata.filteredContext,
+        // Config bundle version the SDK evaluated against — from the
+        // decision-time snapshot, falling back to the current version.
+        configVersion:
+          decision.metadata.configVersion ?? deps.getConfigVersion?.() ?? undefined,
         sdkName: SDK_NAME,
         sdkVersion: SDK_VERSION,
       };

@@ -118,6 +118,8 @@ export {
   softmaxProbabilities,
   applyProbabilityFloor,
   resolveContextualPolicy,
+  resolveContextualPolicyDetailed,
+  type ContextualResolution,
 } from "./scoring/index.js";
 
 // Deduplication

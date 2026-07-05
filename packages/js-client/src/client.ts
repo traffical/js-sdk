@@ -339,6 +339,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
             projectId: this._options.projectId,
             env: this._options.env,
             log: (event: DecisionEvent) => this._dispatchEvent(event),
+            getConfigVersion: () => this.getConfigVersion(),
           }
         ),
         priority: 100, // High priority so it runs before user plugins
@@ -518,7 +519,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
           const decision: DecisionResult = {
             decisionId: resp.decisionId,
             assignments,
-            metadata: resp.metadata,
+            // Snapshot the resolve stateVersion at decision time so events
+            // built later stamp the version this decision was evaluated
+            // against (not whatever response is cached at event-build time).
+            metadata: { ...resp.metadata, configVersion: resp.stateVersion },
           };
           this._cacheDecision(decision);
           this._updateCumulativeAttribution(decision);
@@ -587,6 +591,12 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         // Emit to assignment logger (separate from cloud events)
         this._emitAssignmentLogEntries(decision, "exposure");
 
+        // Config bundle version the SDK evaluated against — from the
+        // decision-time snapshot. The current version is only a fallback for
+        // decisions that predate the snapshot field.
+        const configVersion =
+          decision.metadata.configVersion ?? this.getConfigVersion() ?? undefined;
+
         // Check each layer for deduplication
         for (const layer of decision.metadata.layers) {
           if (!layer.policyId || !layer.allocationName) continue;
@@ -611,6 +621,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
             assignments: decision.assignments,
             layers: decision.metadata.layers,
             context: decision.metadata.filteredContext,
+            configVersion,
             sdkName: SDK_NAME,
             sdkVersion: SDK_VERSION,
           };
@@ -864,6 +875,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) return;
 
+    // Config bundle version the SDK evaluated against — from the
+    // decision-time snapshot, falling back to the current version.
+    const configVersion =
+      decision.metadata.configVersion ?? this.getConfigVersion() ?? undefined;
+
     for (const layer of decision.metadata.layers) {
       if (!layer.policyId || !layer.allocationName) continue;
 
@@ -896,6 +912,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         decisionId: decision.decisionId,
         anonymousId: this._stableId.getId(),
         id: generateAssignmentId(),
+        bucket: layer.bucket >= 0 ? layer.bucket : undefined,
+        probability: layer.probability,
+        modelVersion: layer.modelVersion,
+        configVersion,
       });
     }
   }

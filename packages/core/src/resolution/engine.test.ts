@@ -528,3 +528,382 @@ describe("decide - per-layer unit key", () => {
     expect(decision.assignments["pricing.discount"]).toBe(0);
   });
 });
+
+// =============================================================================
+// Propensity (probability) metadata
+// =============================================================================
+//
+// Adaptive policies record the propensity of the CHOSEN allocation at
+// decision time in `LayerResolution.probability` for off-policy training:
+// - bucket-based adaptive: the allocation's bucket-range share
+// - per-entity (bundle mode): the entity weight the SDK actually used
+// - static: omitted (fixed split, not a propensity)
+//
+// We construct bundles inline to avoid baking new fixtures into
+// `@traffical/sdk-spec` for this incremental field.
+describe("decide - propensity (probability) metadata", () => {
+  function buildPropensityBundle(): ConfigBundle {
+    return {
+      version: "2024-01-01T00:00:00.000Z",
+      orgId: "org_test",
+      projectId: "proj_test",
+      env: "production",
+      hashing: { unitKey: "userId", bucketCount: 1000 },
+      parameters: [
+        {
+          key: "ui.primaryColor",
+          type: "string",
+          default: "#000000",
+          layerId: "layer_static",
+          namespace: "ui",
+        },
+        {
+          key: "pricing.discount",
+          type: "number",
+          default: 0,
+          layerId: "layer_adaptive",
+          namespace: "pricing",
+        },
+      ],
+      layers: [
+        {
+          id: "layer_static",
+          policies: [
+            {
+              id: "policy_static",
+              state: "running",
+              kind: "static",
+              allocations: [
+                {
+                  name: "control",
+                  bucketRange: [0, 499],
+                  overrides: { "ui.primaryColor": "#0000FF" },
+                },
+                {
+                  name: "treatment",
+                  bucketRange: [500, 999],
+                  overrides: { "ui.primaryColor": "#FF0000" },
+                },
+              ],
+              conditions: [],
+            },
+          ],
+        },
+        {
+          id: "layer_adaptive",
+          policies: [
+            {
+              id: "policy_bandit",
+              state: "running",
+              kind: "adaptive",
+              allocations: [
+                {
+                  name: "discount_10",
+                  bucketRange: [0, 249],
+                  overrides: { "pricing.discount": 10 },
+                },
+                {
+                  name: "discount_20",
+                  bucketRange: [250, 999],
+                  overrides: { "pricing.discount": 20 },
+                },
+              ],
+              conditions: [],
+            },
+          ],
+        },
+      ],
+    } as unknown as ConfigBundle;
+  }
+
+  const defaults = {
+    "ui.primaryColor": "#000000",
+    "pricing.discount": 0,
+  };
+
+  test("static policies omit probability", () => {
+    const decision = decide(buildPropensityBundle(), { userId: "user-abc" }, defaults);
+
+    const staticLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_static"
+    );
+    expect(staticLayer).toBeDefined();
+    expect(staticLayer!.policyId).toBe("policy_static");
+    expect(staticLayer!.probability).toBeUndefined();
+    expect(staticLayer!.modelVersion).toBeUndefined();
+  });
+
+  test("adaptive bucket-based policies record the bucket-range share", () => {
+    const bundle = buildPropensityBundle();
+    const decision = decide(bundle, { userId: "user-abc" }, defaults);
+
+    const adaptiveLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_adaptive"
+    );
+    expect(adaptiveLayer).toBeDefined();
+    expect(adaptiveLayer!.policyId).toBe("policy_bandit");
+    expect(adaptiveLayer!.probability).toBeDefined();
+
+    // The propensity must equal the CHOSEN allocation's bucket-range share.
+    const chosen = (bundle.layers[1].policies[0].allocations).find(
+      (a) => a.name === adaptiveLayer!.allocationName
+    )!;
+    const share = (chosen.bucketRange[1] - chosen.bucketRange[0] + 1) / 1000;
+    expect(adaptiveLayer!.probability!).toBeCloseTo(share, 10);
+    expect([0.25, 0.75]).toContain(adaptiveLayer!.probability!);
+    // Not a contextual selection — no model version.
+    expect(adaptiveLayer!.modelVersion).toBeUndefined();
+  });
+
+  test("per-entity bundle-mode policies record the entity weight actually used", () => {
+    const bundle: ConfigBundle = {
+      version: "2024-01-01T00:00:00.000Z",
+      orgId: "org_test",
+      projectId: "proj_test",
+      env: "production",
+      hashing: { unitKey: "userId", bucketCount: 1000 },
+      parameters: [
+        {
+          key: "pricing.discount",
+          type: "number",
+          default: 0,
+          layerId: "layer_entity",
+          namespace: "pricing",
+        },
+      ],
+      layers: [
+        {
+          id: "layer_entity",
+          policies: [
+            {
+              id: "policy_entity",
+              state: "running",
+              kind: "adaptive",
+              allocations: [
+                {
+                  id: "alloc_a",
+                  name: "variant_a",
+                  bucketRange: [0, 499],
+                  overrides: { "pricing.discount": 10 },
+                },
+                {
+                  id: "alloc_b",
+                  name: "variant_b",
+                  bucketRange: [500, 999],
+                  overrides: { "pricing.discount": 20 },
+                },
+              ],
+              conditions: [],
+              entityConfig: {
+                entityKeys: ["productId"],
+                resolutionMode: "bundle",
+              },
+            },
+          ],
+        },
+      ],
+      entityState: {
+        policy_entity: {
+          _global: {
+            entityId: "_global",
+            weights: [0.5, 0.5],
+            computedAt: "2024-01-01T00:00:00.000Z",
+          },
+          entities: {
+            "prod-42": {
+              entityId: "prod-42",
+              weights: [0.9, 0.1],
+              computedAt: "2024-01-01T00:00:00.000Z",
+            },
+          },
+        },
+      },
+    } as unknown as ConfigBundle;
+
+    const decision = decide(
+      bundle,
+      { userId: "user-1", productId: "prod-42" },
+      { "pricing.discount": 0 }
+    );
+
+    const entityLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_entity"
+    );
+    expect(entityLayer).toBeDefined();
+    expect(entityLayer!.policyId).toBe("policy_entity");
+    expect(entityLayer!.probability).toBeDefined();
+    // The propensity is the weight the SDK actually used for the chosen
+    // allocation from the entity's learned weights [0.9, 0.1].
+    const chosenWeight = entityLayer!.allocationName === "variant_a" ? 0.9 : 0.1;
+    expect(entityLayer!.probability!).toBeCloseTo(chosenWeight, 10);
+
+    // Unknown entity falls back to the global prior weights [0.5, 0.5].
+    const coldDecision = decide(
+      bundle,
+      { userId: "user-1", productId: "prod-unknown" },
+      { "pricing.discount": 0 }
+    );
+    const coldLayer = coldDecision.metadata.layers.find(
+      (l) => l.layerId === "layer_entity"
+    );
+    expect(coldLayer!.probability!).toBeCloseTo(0.5, 10);
+  });
+});
+
+// =============================================================================
+// Probability bounds guard
+// =============================================================================
+//
+// The events schema requires probability in (0, 1] (exclusiveMinimum 0,
+// maximum 1). Out-of-range values are OMITTED — never clamped, never emitted
+// as 0 or >1.
+describe("decide - probability bounds guard", () => {
+  test("omits probability when the bucket-range share exceeds 1 (inconsistent bucketCount)", () => {
+    // bucketCount 100 but the allocation spans 1000 buckets — the computed
+    // share would be 10, which must be omitted rather than emitted raw.
+    const bundle = {
+      version: "2024-01-01T00:00:00.000Z",
+      orgId: "org_test",
+      projectId: "proj_test",
+      env: "production",
+      hashing: { unitKey: "userId", bucketCount: 100 },
+      parameters: [
+        {
+          key: "pricing.discount",
+          type: "number",
+          default: 0,
+          layerId: "layer_adaptive",
+          namespace: "pricing",
+        },
+      ],
+      layers: [
+        {
+          id: "layer_adaptive",
+          policies: [
+            {
+              id: "policy_bandit",
+              state: "running",
+              kind: "adaptive",
+              allocations: [
+                {
+                  name: "discount_10",
+                  bucketRange: [0, 999],
+                  overrides: { "pricing.discount": 10 },
+                },
+              ],
+              conditions: [],
+            },
+          ],
+        },
+      ],
+    } as unknown as ConfigBundle;
+
+    const decision = decide(bundle, { userId: "user-abc" }, { "pricing.discount": 0 });
+    const layer = decision.metadata.layers.find((l) => l.layerId === "layer_adaptive");
+
+    expect(layer).toBeDefined();
+    expect(layer!.policyId).toBe("policy_bandit");
+    // The selection still happened, but the out-of-range propensity is omitted.
+    expect(layer!.allocationName).toBe("discount_10");
+    expect(layer!.probability).toBeUndefined();
+  });
+
+  test("omits probability for degenerate zero-weight per-entity selections", () => {
+    // All-zero entity weights: weightedSelection falls back to the last
+    // index, whose weight (0) is not a valid propensity and must be omitted.
+    const bundle = {
+      version: "2024-01-01T00:00:00.000Z",
+      orgId: "org_test",
+      projectId: "proj_test",
+      env: "production",
+      hashing: { unitKey: "userId", bucketCount: 1000 },
+      parameters: [
+        {
+          key: "pricing.discount",
+          type: "number",
+          default: 0,
+          layerId: "layer_entity",
+          namespace: "pricing",
+        },
+      ],
+      layers: [
+        {
+          id: "layer_entity",
+          policies: [
+            {
+              id: "policy_entity",
+              state: "running",
+              kind: "adaptive",
+              allocations: [
+                {
+                  id: "alloc_a",
+                  name: "variant_a",
+                  bucketRange: [0, 499],
+                  overrides: { "pricing.discount": 10 },
+                },
+                {
+                  id: "alloc_b",
+                  name: "variant_b",
+                  bucketRange: [500, 999],
+                  overrides: { "pricing.discount": 20 },
+                },
+              ],
+              conditions: [],
+              entityConfig: {
+                entityKeys: ["productId"],
+                resolutionMode: "bundle",
+              },
+            },
+          ],
+        },
+      ],
+      entityState: {
+        policy_entity: {
+          entities: {
+            "prod-degenerate": {
+              entityId: "prod-degenerate",
+              weights: [0, 0],
+              computedAt: "2024-01-01T00:00:00.000Z",
+            },
+          },
+        },
+      },
+    } as unknown as ConfigBundle;
+
+    const decision = decide(
+      bundle,
+      { userId: "user-1", productId: "prod-degenerate" },
+      { "pricing.discount": 0 }
+    );
+    const layer = decision.metadata.layers.find((l) => l.layerId === "layer_entity");
+
+    expect(layer).toBeDefined();
+    expect(layer!.policyId).toBe("policy_entity");
+    // A selection was made (fallback), but its zero weight is not a valid
+    // propensity in (0, 1] and must be omitted.
+    expect(layer!.allocationName).toBeDefined();
+    expect(layer!.probability).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// configVersion snapshot
+// =============================================================================
+//
+// The config bundle version is captured AT DECISION TIME into the decision
+// metadata; decision/exposure events are stamped from that snapshot so a
+// background config refresh between decide() and the event build can't
+// misattribute the decision to a newer version.
+describe("decide - configVersion snapshot", () => {
+  const bundle = bundleBasic as unknown as ConfigBundle;
+
+  test("stamps the bundle version into decision metadata", () => {
+    const decision = decide(bundle, { userId: "user-abc" }, basicDefaults);
+    expect(decision.metadata.configVersion).toBe(bundle.version);
+  });
+
+  test("omits configVersion on cold start (no bundle)", () => {
+    const decision = decide(null, { userId: "user-abc" }, basicDefaults);
+    expect(decision.metadata.configVersion).toBeUndefined();
+  });
+});

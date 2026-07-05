@@ -9,4 +9,6 @@ export {
   softmaxProbabilities,
   applyProbabilityFloor,
   resolveContextualPolicy,
+  resolveContextualPolicyDetailed,
+  type ContextualResolution,
 } from "./contextual.js";

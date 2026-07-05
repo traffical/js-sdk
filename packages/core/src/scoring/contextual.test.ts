@@ -9,8 +9,10 @@ import {
   computeAllocationScore,
   softmaxProbabilities,
   applyProbabilityFloor,
+  resolveContextualPolicy,
+  resolveContextualPolicyDetailed,
 } from "./contextual.js";
-import type { BundleAllocationCoefficients } from "../types/index.js";
+import type { BundleAllocationCoefficients, BundlePolicy } from "../types/index.js";
 
 describe("computeAllocationScore", () => {
   test("returns intercept when no features", () => {
@@ -191,5 +193,90 @@ describe("applyProbabilityFloor", () => {
     expect(result[2]).toBeGreaterThan(0.1);
     // The dominant entry should still be the largest
     expect(result[1]).toBeGreaterThan(result[0]);
+  });
+});
+
+describe("resolveContextualPolicyDetailed", () => {
+  function createContextualPolicy(): BundlePolicy {
+    return {
+      id: "policy_ctx",
+      state: "running",
+      kind: "adaptive",
+      allocations: [
+        { id: "alloc_a", name: "control", bucketRange: [0, 499], overrides: {} },
+        { id: "alloc_b", name: "treatment", bucketRange: [500, 999], overrides: {} },
+      ],
+      conditions: [],
+      contextualModel: {
+        gamma: 1.0,
+        actionProbabilityFloor: 0.05,
+        defaultAllocationScore: 0,
+        coefficients: {
+          control: { intercept: 0.0, numeric: [], categorical: [] },
+          treatment: {
+            intercept: 0.5,
+            numeric: [{ key: "engagement_score", coef: 0.3, missing: 0 }],
+            categorical: [],
+          },
+        },
+      },
+    };
+  }
+
+  test("returns the chosen allocation with its floored-softmax probability", () => {
+    const policy = createContextualPolicy();
+    const context = { engagement_score: 8 };
+
+    const result = resolveContextualPolicyDetailed(policy, context, "user-1");
+    expect(result).not.toBeNull();
+
+    // Recompute the distribution the selection sampled from:
+    // control: 0, treatment: 0.5 + 0.3*8 = 2.9
+    const probs = softmaxProbabilities([0, 2.9], 1.0);
+    const floored = applyProbabilityFloor(probs, 0.05);
+    const chosenIndex = policy.allocations.findIndex(
+      (a) => a.name === result!.allocation.name
+    );
+
+    expect(result!.probability).toBeCloseTo(floored[chosenIndex], 10);
+    expect(result!.probability).toBeGreaterThan(0);
+    expect(result!.probability).toBeLessThanOrEqual(1);
+  });
+
+  test("probability respects the action probability floor", () => {
+    const policy = createContextualPolicy();
+    // Very high engagement makes treatment dominant; every user's chosen
+    // allocation probability is either near-1 (treatment) or at the
+    // renormalized floor (control) — never below it.
+    const context = { engagement_score: 100 };
+
+    for (const unitKey of ["user-a", "user-b", "user-c", "user-d"]) {
+      const result = resolveContextualPolicyDetailed(policy, context, unitKey);
+      expect(result).not.toBeNull();
+      expect(result!.probability).toBeGreaterThanOrEqual(0.05 / 1.05 - 1e-10);
+    }
+  });
+
+  test("returns null when policy has no contextualModel", () => {
+    const policy = createContextualPolicy();
+    delete policy.contextualModel;
+    expect(resolveContextualPolicyDetailed(policy, {}, "user-1")).toBeNull();
+  });
+
+  test("returns null when policy has no allocations", () => {
+    const policy = createContextualPolicy();
+    policy.allocations = [];
+    expect(resolveContextualPolicyDetailed(policy, {}, "user-1")).toBeNull();
+  });
+
+  test("resolveContextualPolicy returns the same allocation (back-compat)", () => {
+    const policy = createContextualPolicy();
+    const context = { engagement_score: 8 };
+
+    const detailed = resolveContextualPolicyDetailed(policy, context, "user-1");
+    const allocation = resolveContextualPolicy(policy, context, "user-1");
+
+    expect(allocation).not.toBeNull();
+    expect(allocation!.name).toBe(detailed!.allocation.name);
   });
 });

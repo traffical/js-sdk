@@ -81,6 +81,82 @@ describe("Node TrafficalClient eventLogger", () => {
     await client.destroy();
   });
 
+  test("decision and exposure events carry configVersion", async () => {
+    setupFetchMock();
+    const events: TrackableEvent[] = [];
+
+    const client = new TrafficalClient({
+      ...clientOpts,
+      eventLogger: (event) => events.push(event),
+    });
+    await client.initialize();
+
+    const decision = client.decide({
+      context: { userId: "user-1" },
+      defaults: { "ui.color": "#000" },
+    });
+    client.trackExposure(decision);
+
+    const decisionEvent = events.find((e) => e.type === "decision");
+    const exposureEvent = events.find((e) => e.type === "exposure");
+    expect(decisionEvent).toBeDefined();
+    expect(exposureEvent).toBeDefined();
+    // Server mode: getConfigVersion() surfaces the resolve stateVersion.
+    expect((decisionEvent as { configVersion?: string }).configVersion).toBe(
+      serverResolveResponse.stateVersion
+    );
+    expect((exposureEvent as { configVersion?: string }).configVersion).toBe(
+      serverResolveResponse.stateVersion
+    );
+
+    await client.destroy();
+  });
+
+  test("configVersion is snapshotted at decide() time, not event-build time", async () => {
+    // The mock serves stateVersion v1 first, then v2 after the refresh.
+    let stateVersion = "2024-01-01T00:00:00Z";
+    const fetchMock = mock(async () => {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ ...serverResolveResponse, stateVersion }),
+        headers: new Headers({ ETag: '"v1"' }),
+      } as unknown as Response;
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const events: TrackableEvent[] = [];
+    const client = new TrafficalClient({
+      ...clientOpts,
+      eventLogger: (event) => events.push(event),
+    });
+    await client.initialize();
+
+    // Decide against v1, THEN refresh to v2 before the exposure is built.
+    const decision = client.decide({
+      context: { userId: "user-1" },
+      defaults: { "ui.color": "#000" },
+    });
+    expect(decision.metadata.configVersion).toBe("2024-01-01T00:00:00Z");
+
+    stateVersion = "2024-06-01T00:00:00Z";
+    await client.refreshConfig();
+    expect(client.getConfigVersion()).toBe("2024-06-01T00:00:00Z");
+
+    client.trackExposure(decision);
+
+    // The exposure event carries the decision-time snapshot (v1), not the
+    // stateVersion current at event-build time (v2).
+    const exposureEvent = events.find((e) => e.type === "exposure");
+    expect(exposureEvent).toBeDefined();
+    expect((exposureEvent as { configVersion?: string }).configVersion).toBe(
+      "2024-01-01T00:00:00Z"
+    );
+
+    await client.destroy();
+  });
+
   test("trackExposure() and track() emit exposure + track events", async () => {
     setupFetchMock();
     const events: TrackableEvent[] = [];

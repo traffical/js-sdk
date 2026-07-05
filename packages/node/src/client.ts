@@ -382,7 +382,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       const decision: DecisionResult = {
         decisionId: resp.decisionId,
         assignments,
-        metadata: resp.metadata,
+        // Snapshot the resolve stateVersion at decision time so events
+        // built later stamp the version this decision was evaluated
+        // against (not whatever response is cached at event-build time).
+        metadata: { ...resp.metadata, configVersion: resp.stateVersion },
       };
       this._cacheDecision(decision);
       if (this._options.trackDecisions) {
@@ -434,6 +437,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       assignments: decision.assignments,
       layers: decision.metadata.layers,
       context: decision.metadata.filteredContext,
+      // Config bundle version the SDK evaluated against — from the
+      // decision-time snapshot. The current version is only a fallback for
+      // decisions that predate the snapshot field.
+      configVersion:
+        decision.metadata.configVersion ?? this.getConfigVersion() ?? undefined,
       sdkName: SDK_NAME,
       sdkVersion: SDK_VERSION,
     };
@@ -505,6 +513,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) return;
 
+    // Config bundle version the SDK evaluated against — from the
+    // decision-time snapshot, falling back to the current version.
+    const configVersion =
+      decision.metadata.configVersion ?? this.getConfigVersion() ?? undefined;
+
     const now = Date.now();
 
     for (const layer of decision.metadata.layers) {
@@ -540,6 +553,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         decisionId: decision.decisionId,
         anonymousId: undefined,
         id: generateAssignmentId(),
+        bucket: layer.bucket >= 0 ? layer.bucket : undefined,
+        probability: layer.probability,
+        modelVersion: layer.modelVersion,
+        configVersion,
       });
     }
   }
@@ -708,6 +725,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       latencyMs,
       // Include filtered context if available
       context: decision.metadata.filteredContext,
+      // Config bundle version the SDK evaluated against — from the
+      // decision-time snapshot, falling back to the current version.
+      configVersion:
+        decision.metadata.configVersion ?? this.getConfigVersion() ?? undefined,
       sdkName: SDK_NAME,
       sdkVersion: SDK_VERSION,
     };

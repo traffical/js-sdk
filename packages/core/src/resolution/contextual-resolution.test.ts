@@ -6,6 +6,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { resolveParameters, decide } from "./engine.js";
+import { softmaxProbabilities, applyProbabilityFloor } from "../scoring/contextual.js";
 import type { ConfigBundle } from "../types/index.js";
 
 import { bundleContextual, expectedContextual } from "@traffical/sdk-spec";
@@ -41,7 +42,93 @@ describe("contextual scoring resolution", () => {
       expect(heroLayer!.policyId).toBe("policy_contextual");
       expect(heroLayer!.allocationName).toBe(tc.expectedAllocation);
     });
+
+    test(`decide records propensity of the chosen allocation: ${tc.name}`, () => {
+      const decision = decide(bundle, tc.context, defaults);
+      const heroLayer = decision.metadata.layers.find(
+        (l) => l.layerId === "layer_hero"
+      );
+      expect(heroLayer).toBeDefined();
+
+      // Recompute the floored-softmax distribution from the fixture's
+      // expected raw scores; the layer entry must carry the probability
+      // of the chosen allocation from that same distribution.
+      const model = bundle.layers[0].policies[0].contextualModel!;
+      const probs = softmaxProbabilities(tc.expectedScoring.scores, model.gamma);
+      const floored = applyProbabilityFloor(probs, model.actionProbabilityFloor);
+      const chosenIndex = bundle.layers[0].policies[0].allocations.findIndex(
+        (a) => a.name === tc.expectedAllocation
+      );
+
+      expect(heroLayer!.probability).toBeDefined();
+      expect(heroLayer!.probability!).toBeCloseTo(floored[chosenIndex], 10);
+    });
   }
+
+  test("decide records modelVersion from policy stateVersion for contextual selections", () => {
+    // The fixture bundle carries neither generatedAt nor stateVersion —
+    // build a copy with a stateVersion to verify the fallback.
+    const bundleWithStateVersion = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;
+    bundleWithStateVersion.layers[0].policies[0].stateVersion = "2024-06-15T12:00:00.000Z";
+
+    const decision = decide(
+      bundleWithStateVersion,
+      { userId: "user-high-engage", engagement_score: 8.0, device_type: "mobile" },
+      defaults
+    );
+
+    const heroLayer = decision.metadata.layers.find((l) => l.layerId === "layer_hero");
+    expect(heroLayer!.modelVersion).toBe("2024-06-15T12:00:00.000Z");
+  });
+
+  test("decide prefers the contextual model's generatedAt as modelVersion", () => {
+    const bundleWithGeneratedAt = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;
+    bundleWithGeneratedAt.layers[0].policies[0].stateVersion = "2024-06-15T12:00:00.000Z";
+    bundleWithGeneratedAt.layers[0].policies[0].contextualModel!.generatedAt =
+      "2024-06-20T08:30:00.000Z";
+    // The alias must lose to the canonical generatedAt.
+    bundleWithGeneratedAt.layers[0].policies[0].contextualModel!.modelVersion =
+      "2024-06-18T00:00:00.000Z";
+
+    const decision = decide(
+      bundleWithGeneratedAt,
+      { userId: "user-high-engage", engagement_score: 8.0, device_type: "mobile" },
+      defaults
+    );
+
+    const heroLayer = decision.metadata.layers.find((l) => l.layerId === "layer_hero");
+    expect(heroLayer!.modelVersion).toBe("2024-06-20T08:30:00.000Z");
+  });
+
+  test("decide falls back to the contextual model's modelVersion alias when generatedAt is absent", () => {
+    const bundleWithAlias = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;
+    bundleWithAlias.layers[0].policies[0].stateVersion = "2024-06-15T12:00:00.000Z";
+    bundleWithAlias.layers[0].policies[0].contextualModel!.modelVersion =
+      "2024-06-18T00:00:00.000Z";
+
+    const decision = decide(
+      bundleWithAlias,
+      { userId: "user-high-engage", engagement_score: 8.0, device_type: "mobile" },
+      defaults
+    );
+
+    // The alias wins over the policy stateVersion.
+    const heroLayer = decision.metadata.layers.find((l) => l.layerId === "layer_hero");
+    expect(heroLayer!.modelVersion).toBe("2024-06-18T00:00:00.000Z");
+  });
+
+  test("modelVersion is omitted when neither generatedAt nor stateVersion is present", () => {
+    const decision = decide(
+      bundle,
+      { userId: "user-high-engage", engagement_score: 8.0, device_type: "mobile" },
+      defaults
+    );
+
+    const heroLayer = decision.metadata.layers.find((l) => l.layerId === "layer_hero");
+    expect(heroLayer!.modelVersion).toBeUndefined();
+    // But the propensity is still recorded
+    expect(heroLayer!.probability).toBeDefined();
+  });
 
   test("decide includes filteredContext with allowed fields", () => {
     const decision = decide(
@@ -84,6 +171,15 @@ describe("contextual scoring resolution", () => {
     expect(["control", "treatment_a", "treatment_b"]).toContain(
       heroLayer!.allocationName
     );
+
+    // Still an adaptive policy: the propensity is the chosen allocation's
+    // bucket-range share, and no contextual modelVersion is recorded.
+    const chosen = bundleWithoutModel.layers[0].policies[0].allocations.find(
+      (a) => a.name === heroLayer!.allocationName
+    )!;
+    const share = (chosen.bucketRange[1] - chosen.bucketRange[0] + 1) / 1000;
+    expect(heroLayer!.probability).toBeCloseTo(share, 10);
+    expect(heroLayer!.modelVersion).toBeUndefined();
   });
 
   test("returns defaults when unit key is missing", () => {

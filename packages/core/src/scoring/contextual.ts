@@ -96,6 +96,20 @@ export function applyProbabilityFloor(
 }
 
 /**
+ * Result of contextual policy resolution, including the propensity of the
+ * chosen allocation for off-policy training (IPS/DR estimators).
+ */
+export interface ContextualResolution {
+  /** The selected allocation. */
+  allocation: BundleAllocation;
+  /**
+   * The floored-softmax probability of the chosen allocation at decision
+   * time (the same distribution the deterministic selection sampled from).
+   */
+  probability: number;
+}
+
+/**
  * Resolves a contextual policy to a specific allocation using the trained model.
  *
  * Steps:
@@ -104,13 +118,14 @@ export function applyProbabilityFloor(
  *   3. Apply the action probability floor
  *   4. Deterministically select using weightedSelection with a hash seed
  *
- * @returns The selected allocation, or null if the policy has no allocations
+ * @returns The selected allocation with its selection probability,
+ *   or null if the policy has no allocations
  */
-export function resolveContextualPolicy(
+export function resolveContextualPolicyDetailed(
   policy: BundlePolicy,
   context: Context,
   unitKeyValue: string
-): BundleAllocation | null {
+): ContextualResolution | null {
   const model = policy.contextualModel;
   if (!model) return null;
   if (policy.allocations.length === 0) return null;
@@ -122,7 +137,26 @@ export function resolveContextualPolicy(
   const seed = `ctx:${unitKeyValue}:${policy.id}`;
   const selectedIndex = weightedSelection(floored, seed);
 
-  return policy.allocations[selectedIndex];
+  return {
+    allocation: policy.allocations[selectedIndex],
+    probability: floored[selectedIndex],
+  };
+}
+
+/**
+ * Resolves a contextual policy to a specific allocation using the trained model.
+ *
+ * Convenience wrapper around {@link resolveContextualPolicyDetailed} that
+ * discards the selection probability.
+ *
+ * @returns The selected allocation, or null if the policy has no allocations
+ */
+export function resolveContextualPolicy(
+  policy: BundlePolicy,
+  context: Context,
+  unitKeyValue: string
+): BundleAllocation | null {
+  return resolveContextualPolicyDetailed(policy, context, unitKeyValue)?.allocation ?? null;
 }
 
 /**

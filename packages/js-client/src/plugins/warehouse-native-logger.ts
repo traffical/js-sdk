@@ -88,6 +88,10 @@ function toAssignmentProps(entry: AssignmentLogEntry): Record<string, unknown> {
     decision_id: entry.decisionId,
     anonymous_id: entry.anonymousId,
     assignment_id: entry.id,
+    bucket: entry.bucket,
+    propensity: entry.probability,
+    model_version: entry.modelVersion,
+    config_version: entry.configVersion,
     ...entry.properties,
   };
 }

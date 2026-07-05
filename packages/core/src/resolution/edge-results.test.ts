@@ -167,6 +167,28 @@ describe("resolveInternal with edgeResults", () => {
     expect(edgeLayer!.allocationName).toBe("3");
   });
 
+  test("edge-resolved layers omit probability (SDK did not compute the weight)", () => {
+    const bundle = createBundleWithEdgePolicy();
+    const context = { userId: "user-1", productId: "prod-42" };
+    const defaults = { "pricing.discount": 0 };
+
+    const edgeResults = new Map([
+      ["policy_edge", { allocationIndex: 1, entityId: "prod-42" }],
+    ]);
+
+    const decision = decide(bundle, context, defaults, { edgeResults });
+    const edgeLayer = decision.metadata.layers.find(
+      (l) => l.layerId === "layer_edge"
+    );
+
+    expect(edgeLayer).toBeDefined();
+    expect(edgeLayer!.policyId).toBe("policy_edge");
+    // The edge worker made the weighted selection — the SDK doesn't know
+    // the propensity, so it must not fabricate one.
+    expect(edgeLayer!.probability).toBeUndefined();
+    expect(edgeLayer!.modelVersion).toBeUndefined();
+  });
+
   test("missing edge result gracefully skips the policy", () => {
     const bundle = createBundleWithEdgePolicy();
     const context = { userId: "user-1", productId: "prod-42" };

@@ -82,6 +82,12 @@ describe("Node TrafficalClient assignmentLogger", () => {
     expect(entry.decisionId).toBe("dec_server_1");
     expect(entry.anonymousId).toBeUndefined();
     expect(entry.id).toMatch(/^asn_/);
+    // Warehouse-native passthrough fields from the layer resolution.
+    expect(entry.bucket).toBe(500);
+    expect(entry.configVersion).toBe(serverResolveResponse.stateVersion);
+    // The server response carries no propensity or contextual model version.
+    expect(entry.probability).toBeUndefined();
+    expect(entry.modelVersion).toBeUndefined();
 
     await client.destroy();
   });

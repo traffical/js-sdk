@@ -161,6 +161,18 @@ export interface BundleContextualModel {
   defaultAllocationScore: number;
   /** Coefficients per allocation, keyed by allocation name. */
   coefficients: Record<string, BundleAllocationCoefficients>;
+  /**
+   * Timestamp of the training run that produced these coefficients
+   * (the control plane's trainingSummary.generatedAt). When absent,
+   * the `modelVersion` alias and then the policy's `stateVersion` are
+   * used as the model version for exposure logging.
+   */
+  generatedAt?: Timestamp;
+  /**
+   * Alias for `generatedAt` emitted by some bundle builders.
+   * Read only when `generatedAt` is absent.
+   */
+  modelVersion?: Timestamp;
 }
 
 /**
@@ -386,6 +398,28 @@ export interface LayerResolution {
    */
   unitKeyValue?: string;
   /**
+   * Propensity of the CHOSEN allocation at decision time, in (0, 1].
+   *
+   * Only present for adaptive policies:
+   * - linear_contextual: the floored-softmax probability of the chosen
+   *   allocation.
+   * - other adaptive policies (bucket-based bandits): the chosen allocation's
+   *   bucket-range share = (bucketRange[1] - bucketRange[0] + 1) / bucketCount.
+   * - per-entity policies (bundle mode): the entity weight the SDK actually
+   *   used for weighted selection.
+   *
+   * Omitted for static policies and when the SDK did not compute the
+   * selection itself (e.g. per-entity edge mode).
+   */
+  probability?: number;
+  /**
+   * For linear_contextual policies: version timestamp of the trained model
+   * whose coefficients produced this selection (the bundle model's
+   * `generatedAt`, falling back to its `modelVersion` alias, then to the
+   * policy's `stateVersion`). Omitted for all other policies.
+   */
+  modelVersion?: string;
+  /**
    * When true, this layer was resolved for attribution/assignment purposes only —
    * no parameters from this layer were requested by the caller.
    *
@@ -425,6 +459,14 @@ export interface DecisionMetadata {
    * Used for contextual bandit training without exposing PII.
    */
   filteredContext?: Context;
+  /**
+   * The config bundle version the SDK evaluated against, captured at
+   * decision time (bundle mode: the bundle's `version`; server mode: the
+   * resolve response's `stateVersion`). Events built from this decision
+   * stamp this snapshot, not whatever version is current at event-build
+   * time. Omitted on cold start (no bundle yet).
+   */
+  configVersion?: string;
 }
 
 // =============================================================================
@@ -472,6 +514,8 @@ export interface ExposureEvent extends BaseEventFields {
   assignments: Record<string, ParameterValue>;
   /** Per-layer resolution metadata */
   layers: LayerResolution[];
+  /** The config bundle "version" the SDK evaluated against */
+  configVersion?: string;
 }
 
 /**
@@ -535,6 +579,8 @@ export interface DecisionEvent extends BaseEventFields {
   layers: LayerResolution[];
   /** Processing time in milliseconds */
   latencyMs?: number;
+  /** The config bundle "version" the SDK evaluated against */
+  configVersion?: string;
 }
 
 /**
@@ -599,6 +645,14 @@ export interface AssignmentLogEntry {
   anonymousId?: string;
   /** Unique id for this assignment log entry */
   id?: string;
+  /** The bucket computed for this layer (omitted when unknown, e.g. bucket -1) */
+  bucket?: number;
+  /** Propensity of the chosen allocation at decision time, in (0, 1] (adaptive policies only) */
+  probability?: number;
+  /** Version of the contextual model that produced this selection (linear_contextual only) */
+  modelVersion?: string;
+  /** The config bundle version the SDK evaluated against */
+  configVersion?: string;
 }
 
 /** Callback type for routing assignment events to a customer-managed pipeline. */

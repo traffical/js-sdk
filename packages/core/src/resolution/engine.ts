@@ -233,6 +233,38 @@ export function getUnitKeyValue(
   return String(value);
 }
 
+/**
+ * Returns the context field name the bundle buckets on (the project's primary
+ * unit key). Adapters (e.g. the OpenFeature provider) map their own targeting
+ * key onto this field before calling decide().
+ *
+ * @param bundle - The config bundle (may be null before load)
+ * @returns the `hashing.unitKey` field name, or null when no bundle is loaded
+ */
+export function getUnitKeyField(bundle: ConfigBundle | null): string | null {
+  return bundle?.hashing?.unitKey ?? null;
+}
+
+/**
+ * Returns the id of the layer a parameter belongs to, or null if the parameter
+ * is not present in the bundle. Adapters use this to select the owning layer's
+ * resolution metadata (variant, propensity, …) for a single flag, since a
+ * single-key decide() returns a LayerResolution for every matched layer
+ * (siblings flagged `attributionOnly`), not just the flag's own layer.
+ *
+ * @param bundle - The config bundle (may be null before load)
+ * @param key - The parameter key
+ * @returns the owning layer id, or null when unknown
+ */
+export function getParameterLayerId(
+  bundle: ConfigBundle | null,
+  key: string
+): string | null {
+  if (!bundle) return null;
+  const param = bundle.parameters.find((p) => p.key === key);
+  return param?.layerId ?? null;
+}
+
 // =============================================================================
 // Resolve Options (for server-evaluated mode)
 // =============================================================================

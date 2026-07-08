@@ -31,6 +31,8 @@ import {
   resolveParameters,
   decide as coreDecide,
   getUnitKeyValue,
+  getUnitKeyField as coreGetUnitKeyField,
+  getParameterLayerId as coreGetParameterLayerId,
   generateExposureId,
   generateTrackEventId,
   generateDecisionId,
@@ -458,6 +460,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    */
   getConfigVersion(): string | null {
     return this._state.serverResponse?.stateVersion ?? this._state.bundle?.version ?? null;
+  }
+
+  /**
+   * Returns the context field the bundle buckets on (the project's unit key),
+   * or null before the bundle has loaded. Adapters (e.g. an OpenFeature
+   * provider) map their targeting key onto this field.
+   */
+  getUnitKeyField(): string | null {
+    return coreGetUnitKeyField(this._getEffectiveBundle());
+  }
+
+  /**
+   * Returns the id of the layer a parameter belongs to, or null if the
+   * parameter is unknown / the bundle is not yet loaded.
+   */
+  getParameterLayerId(key: string): string | null {
+    return coreGetParameterLayerId(this._getEffectiveBundle(), key);
   }
 
   // ===========================================================================

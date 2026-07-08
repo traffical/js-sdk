@@ -92,6 +92,8 @@ export {
   resolveParameters,
   decide,
   getUnitKeyValue,
+  getUnitKeyField,
+  getParameterLayerId,
   type ResolveOptions,
   evaluateCondition,
   evaluateConditions,

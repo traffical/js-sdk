@@ -8,6 +8,8 @@ export {
   resolveParameters,
   decide,
   getUnitKeyValue,
+  getUnitKeyField,
+  getParameterLayerId,
   type ResolveOptions,
 } from "./engine.js";
 

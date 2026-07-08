@@ -16,6 +16,7 @@ import {
   type ConfigBundle,
   type Context,
   type DecisionResult,
+  type LayerResolution,
   type ParameterValue,
   type TrafficalClientOptions as CoreClientOptions,
   type TrackOptions,
@@ -32,6 +33,8 @@ import {
   type OnSchemaWarnings,
   resolveParameters,
   decide as coreDecide,
+  getUnitKeyField as coreGetUnitKeyField,
+  getParameterLayerId as coreGetParameterLayerId,
   DecisionDeduplicator,
   generateExposureId,
   generateTrackEventId,
@@ -56,6 +59,8 @@ const OFFLINE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
 const DECISION_CACHE_MAX_SIZE = 1000; // Max decisions to cache for attribution lookup
 const ASSIGNMENT_LOGGER_LRU_MAX = 10_000;
 const ASSIGNMENT_LOGGER_LRU_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EXPOSURE_DEDUP_LRU_MAX = 10_000;
+const DEFAULT_EXPOSURE_SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (mirrors js-client)
 
 // =============================================================================
 // Types
@@ -122,6 +127,17 @@ export interface TrafficalClientOptions extends CoreClientOptions {
    * (same unit+policy+variant won't fire again within TTL). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
+
+  /**
+   * When true, exposure events are deduplicated per (unit, policy, allocation)
+   * within a session via in-memory LRU, mirroring the browser SDK. Default: true.
+   */
+  deduplicateExposures?: boolean;
+
+  /**
+   * Exposure deduplication session TTL in milliseconds (default: 30 minutes).
+   */
+  exposureSessionTtlMs?: number;
 
   /**
    * Optional callback for routing full events (exposure, track, decision)
@@ -199,6 +215,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _disableCloudEvents: boolean;
   /** In-memory LRU for assignment logger deduplication: key → expiry timestamp */
   private readonly _assignmentLoggerDedup: Map<string, number> | null;
+  /** In-memory LRU for exposure-event deduplication: key → expiry timestamp */
+  private readonly _exposureDedup: Map<string, number> | null;
+  /** Session TTL for exposure deduplication (ms) */
+  private readonly _exposureSessionTtlMs: number;
   /** Cache of recent decisions for attribution lookup on rewards */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
 
@@ -264,6 +284,8 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     this._assignmentLoggerDedup = (options.deduplicateAssignmentLogger !== false && options.assignmentLogger)
       ? new Map<string, number>()
       : null;
+    this._exposureDedup = options.deduplicateExposures !== false ? new Map<string, number>() : null;
+    this._exposureSessionTtlMs = options.exposureSessionTtlMs ?? DEFAULT_EXPOSURE_SESSION_TTL_MS;
 
     // Initialize with local config if provided
     if (this._options.localConfig) {
@@ -327,6 +349,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    */
   getConfigVersion(): string | null {
     return this._state.serverResponse?.stateVersion ?? this._state.bundle?.version ?? null;
+  }
+
+  /**
+   * Returns the context field the bundle buckets on (the project's unit key),
+   * or null before the bundle has loaded. Adapters (e.g. an OpenFeature
+   * provider) map their targeting key onto this field.
+   */
+  getUnitKeyField(): string | null {
+    return coreGetUnitKeyField(this._getEffectiveBundle());
+  }
+
+  /**
+   * Returns the id of the layer a parameter belongs to, or null if the
+   * parameter is unknown / the bundle is not yet loaded.
+   */
+  getParameterLayerId(key: string): string | null {
+    return coreGetParameterLayerId(this._getEffectiveBundle(), key);
   }
 
   /**
@@ -411,10 +450,16 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   }
 
   /**
-   * Tracks an exposure event.
+   * Tracks an exposure event — the "user was actually shown this treatment"
+   * signal (treatment-on-the-treated).
    *
-   * If the decision includes filtered context (from policies with contextLogging),
-   * it will be included in the exposure event for contextual bandit training.
+   * Only layers the caller was actually exposed to are emitted: layers without
+   * a policy/allocation and `attributionOnly` layers (resolved for attribution
+   * but whose parameters weren't requested) are skipped, and each
+   * (unit, policy, allocation) is deduplicated per session so the same exposure
+   * isn't emitted twice. Mirrors the browser SDK. If the decision includes
+   * filtered context (from policies with contextLogging), it is included in the
+   * exposure event for contextual bandit training.
    */
   trackExposure(decision: DecisionResult): void {
     const unitKey = decision.metadata.unitKeyValue;
@@ -422,8 +467,38 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       return;
     }
 
-    // Emit to assignment logger (separate from cloud events)
+    // Emit to assignment logger (separate from cloud events; has its own dedup)
     this._emitAssignmentLogEntries(decision, "exposure");
+
+    // Exposure layers = layers actually shown. Skip attribution-only layers and
+    // layers without a policy/allocation, and dedup per (unit, policy,
+    // allocation) within the session.
+    const now = Date.now();
+    const exposedLayers: LayerResolution[] = [];
+    for (const layer of decision.metadata.layers) {
+      if (!layer.policyId || !layer.allocationName) continue;
+      if (layer.attributionOnly) continue;
+
+      if (this._exposureDedup) {
+        const dedupKey = `${unitKey}:${layer.policyId}:${layer.allocationName}`;
+        const expiry = this._exposureDedup.get(dedupKey);
+        if (expiry !== undefined && now < expiry) continue;
+
+        // Evict oldest entry when the LRU is full.
+        if (this._exposureDedup.size >= EXPOSURE_DEDUP_LRU_MAX) {
+          const firstKey = this._exposureDedup.keys().next().value;
+          if (firstKey) this._exposureDedup.delete(firstKey);
+        }
+        this._exposureDedup.set(dedupKey, now + this._exposureSessionTtlMs);
+      }
+
+      exposedLayers.push(layer);
+    }
+
+    // Nothing new to expose (all attribution-only or already seen this session).
+    if (exposedLayers.length === 0) {
+      return;
+    }
 
     const event: ExposureEvent = {
       type: "exposure",
@@ -435,7 +510,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       unitKey,
       timestamp: new Date().toISOString(),
       assignments: decision.assignments,
-      layers: decision.metadata.layers,
+      layers: exposedLayers,
       context: decision.metadata.filteredContext,
       // Config bundle version the SDK evaluated against — from the
       // decision-time snapshot. The current version is only a fallback for

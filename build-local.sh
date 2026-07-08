@@ -21,6 +21,9 @@ build_pkg "core"
 # 2. core-io (depends on core)
 build_pkg "core-io"
 
+# 2b. openfeature-core (depends on core + @openfeature/core)
+build_pkg "openfeature-core"
+
 # 3. js-client (depends on core, core-io)
 build_pkg "js-client"
 
@@ -29,6 +32,11 @@ build_pkg "node" &
 build_pkg "react" &
 build_pkg "svelte" &
 build_pkg "react-native" &
+wait
+
+# 5. OpenFeature providers (depend on openfeature-core + node/js-client)
+build_pkg "openfeature-server" &
+build_pkg "openfeature-web" &
 wait
 
 

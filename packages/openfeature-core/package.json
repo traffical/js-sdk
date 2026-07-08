@@ -1,0 +1,51 @@
+{
+  "name": "@traffical/openfeature-core",
+  "version": "0.1.0",
+  "description": "Paradigm-agnostic translation layer between Traffical decisions and OpenFeature evaluation",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@traffical/core": "0.10.0"
+  },
+  "peerDependencies": {
+    "@openfeature/core": "^1.11.0"
+  },
+  "devDependencies": {
+    "@openfeature/core": "^1.11.0",
+    "@types/bun": "latest",
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "traffical",
+    "feature-flags",
+    "experimentation",
+    "a/b-testing",
+    "openfeature"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/traffical/js-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

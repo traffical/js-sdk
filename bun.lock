@@ -10,7 +10,7 @@
     },
     "packages/core": {
       "name": "@traffical/core",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
         "@noble/hashes": "^2.2.0",
         "nanoid": "^5.0.9",
@@ -24,9 +24,9 @@
     },
     "packages/core-io": {
       "name": "@traffical/core-io",
-      "version": "0.5.3",
+      "version": "0.6.0",
       "dependencies": {
-        "@traffical/core": "0.9.0",
+        "@traffical/core": "0.10.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -35,10 +35,10 @@
     },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.13.0",
+      "version": "0.15.0",
       "dependencies": {
-        "@traffical/core": "0.9.0",
-        "@traffical/core-io": "0.5.3",
+        "@traffical/core": "0.10.0",
+        "@traffical/core-io": "0.6.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -48,19 +48,70 @@
     },
     "packages/node": {
       "name": "@traffical/node",
-      "version": "0.7.0",
+      "version": "0.9.0",
       "dependencies": {
-        "@traffical/core": "0.9.0",
-        "@traffical/core-io": "0.5.3",
+        "@traffical/core": "0.10.0",
+        "@traffical/core-io": "0.6.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
     },
+    "packages/openfeature-core": {
+      "name": "@traffical/openfeature-core",
+      "version": "0.1.0",
+      "dependencies": {
+        "@traffical/core": "0.10.0",
+      },
+      "devDependencies": {
+        "@openfeature/core": "^1.11.0",
+        "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+      "peerDependencies": {
+        "@openfeature/core": "^1.11.0",
+      },
+    },
+    "packages/openfeature-server": {
+      "name": "@traffical/openfeature-server",
+      "version": "0.1.0",
+      "dependencies": {
+        "@traffical/core": "0.10.0",
+        "@traffical/node": "0.9.0",
+        "@traffical/openfeature-core": "0.1.0",
+      },
+      "devDependencies": {
+        "@openfeature/core": "^1.11.0",
+        "@openfeature/server-sdk": "^1.22.0",
+        "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+      "peerDependencies": {
+        "@openfeature/server-sdk": "^1.22.0",
+      },
+    },
+    "packages/openfeature-web": {
+      "name": "@traffical/openfeature-web",
+      "version": "0.1.0",
+      "dependencies": {
+        "@traffical/core": "0.10.0",
+        "@traffical/js-client": "0.15.0",
+        "@traffical/openfeature-core": "0.1.0",
+      },
+      "devDependencies": {
+        "@openfeature/core": "^1.11.0",
+        "@openfeature/web-sdk": "^1.9.0",
+        "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+      "peerDependencies": {
+        "@openfeature/web-sdk": "^1.9.0",
+      },
+    },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.5.0",
+      "version": "0.6.1",
       "dependencies": {
         "@traffical/core": "0.9.0",
         "@traffical/js-client": "0.13.0",
@@ -76,7 +127,7 @@
     },
     "packages/react-native": {
       "name": "@traffical/react-native",
-      "version": "0.6.0",
+      "version": "0.7.1",
       "dependencies": {
         "@traffical/core": "0.9.0",
         "@traffical/js-client": "0.13.0",
@@ -94,7 +145,7 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.5.0",
+      "version": "0.6.1",
       "dependencies": {
         "@traffical/core": "0.9.0",
         "@traffical/js-client": "0.13.0",
@@ -303,6 +354,12 @@
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
+    "@openfeature/core": ["@openfeature/core@1.11.0", "", {}, "sha512-P0u3/ht/oZCQT89fOed+laLk0kZR529a825cS02uPDglxXbE97irWYpDAeRGGVETIzKfuy+H2g8c3Ccv/tXJNQ=="],
+
+    "@openfeature/server-sdk": ["@openfeature/server-sdk@1.22.0", "", { "peerDependencies": { "@openfeature/core": "^1.11.0" } }, "sha512-YBrf6SQkn0FNB/dRAtLEs41dvFMUE8CrQTwI+iLaMFUIqWlqGNJfGnulKSneEKS+2OgKTAC6DdmKcZ6tK7kBcg=="],
+
+    "@openfeature/web-sdk": ["@openfeature/web-sdk@1.9.0", "", { "peerDependencies": { "@openfeature/core": "^1.11.0" } }, "sha512-FCrNfqvE/thHVfCNU0KKx1SD7rk+1wE2UaR5B5OPZl917QJv6AsKRwaI3N+SVgwXWI07GgtXP6hNlTVb49PGhg=="],
+
     "@react-native-async-storage/async-storage": ["@react-native-async-storage/async-storage@2.2.0", "", { "dependencies": { "merge-options": "^3.0.4" }, "peerDependencies": { "react-native": "^0.0.0-0 || >=0.65 <1.0" } }, "sha512-gvRvjR5JAaUZF8tv2Kcq/Gbt3JHwbKFYfmb445rhOj6NUMx3qPLixmDx5pZAyb9at1bYvJ4/eTUipU5aki45xw=="],
 
     "@react-native/assets-registry": ["@react-native/assets-registry@0.84.0", "", {}, "sha512-YiU9h1IN0pvvZsHbd03MaD7mE2q+ySaKMlE9tWK+3iiwtbEaMQOsMUuSJ1er2LU6ERMWfhfvCYgWpKRGOMeN8A=="],
@@ -342,6 +399,12 @@
     "@traffical/js-client": ["@traffical/js-client@workspace:packages/js-client"],
 
     "@traffical/node": ["@traffical/node@workspace:packages/node"],
+
+    "@traffical/openfeature-core": ["@traffical/openfeature-core@workspace:packages/openfeature-core"],
+
+    "@traffical/openfeature-server": ["@traffical/openfeature-server@workspace:packages/openfeature-server"],
+
+    "@traffical/openfeature-web": ["@traffical/openfeature-web@workspace:packages/openfeature-web"],
 
     "@traffical/react": ["@traffical/react@workspace:packages/react"],
 

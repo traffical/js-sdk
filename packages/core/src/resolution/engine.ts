@@ -328,7 +328,7 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
   // store in `unitKeyValue` is the legacy "no project unit key" signal that
   // downstream code (decision events) already tolerates.
   //
-  // See: ng/docs/design/diversion-types.md
+  // See the diversion-types design in the Traffical SDK spec.
   const projectUnitKeyValue = getUnitKeyValue(bundle, context) ?? "";
 
   // Get requested parameter keys from defaults

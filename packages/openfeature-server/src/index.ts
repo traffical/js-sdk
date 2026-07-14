@@ -5,7 +5,7 @@
  * client. Combines the resolve path (M1) with the exposure / reward / lifecycle
  * path (M2).
  *
- * Design: /Users/marcel/Code/traffical/ng/docs/design/openfeature-provider-design.md
+ * Design: see the OpenFeature provider design in the Traffical SDK spec.
  *   §2 architecture · §3 core mapping · §4 resolution · §5 exposure ·
  *   §6 reward · §7 lifecycle/events · §8 server provider · §10 SDK enhancements ·
  *   §11 testing · §13 measurement fidelity.

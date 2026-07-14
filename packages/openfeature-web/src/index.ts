@@ -4,7 +4,7 @@
  * OpenFeature WEB (static-context) provider backed by the Traffical browser SDK
  * (`@traffical/js-client`). Milestone M3.
  *
- * See `ng/docs/design/openfeature-provider-design.md` §2, §3, §5, §6, §7, §9, §13.
+ * See the OpenFeature provider design in the Traffical SDK spec, §2, §3, §5, §6, §7, §9, §13.
  */
 
 export { TrafficalWebProvider, default } from "./provider.js";

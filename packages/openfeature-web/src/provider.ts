@@ -2,7 +2,7 @@
  * TrafficalWebProvider — the OpenFeature WEB (static-context) provider backed by
  * the Traffical browser SDK (`@traffical/js-client`).
  *
- * Design: `ng/docs/design/openfeature-provider-design.md` §2, §3, §5, §6, §7, §9, §13
+ * Design: see the OpenFeature provider design in the Traffical SDK spec, §2, §3, §5, §6, §7, §9, §13
  * (this is milestone M3). It is a thin, SYNC translation membrane over an
  * already-constructed native client (constructor injection — one client
  * instance, the caller owns lifecycle).

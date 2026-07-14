@@ -108,11 +108,17 @@ export function TrafficalProvider({
     const unitKey = getUnitKey();
     const additionalContext = config.contextFn?.() ?? {};
 
-    // The unit key field name comes from the bundle's hashing config
-    // For now, we use common conventions and let the SDK handle it
+    // Project identity onto the bundle's REAL unit-key field so a custom
+    // `hashing.unitKey` (e.g. "visitorId", "accountId") buckets correctly.
+    // Mirrors @traffical/openfeature-core's buildTrafficalContext. Before the
+    // bundle loads, getUnitKeyField() is null — fall back to the common field
+    // names so client-ready synchronous resolution still has a unit key.
+    const unitKeyField = clientRef.current?.getUnitKeyField?.() ?? null;
+    if (unitKeyField) {
+      return { ...additionalContext, [unitKeyField]: unitKey };
+    }
     return {
       ...additionalContext,
-      // Include common unit key field names
       userId: unitKey,
       deviceId: unitKey,
       anonymousId: unitKey,
@@ -180,22 +186,28 @@ export function TrafficalProvider({
       clientRef.current?.destroy();
       clientRef.current = null;
     };
+    // The client is (re)created only when the connection identity changes. We
+    // deliberately depend ONLY on primitive/scalar options here. Non-primitive
+    // options — `plugins` (array), `localConfig` (object), `assignmentLogger` /
+    // `eventLogger` (functions) — are almost always fresh references on every
+    // render for callers who inline `config`, and including them would tear the
+    // client down and refetch config on every render (a destroy+refetch storm).
+    // They are read once at construction from the latest `config`. If you need
+    // to change one at runtime, remount the provider with a new `key`, and
+    // memoize `config` so identity is stable. See the provider docs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     config.orgId,
     config.projectId,
     config.env,
     config.apiKey,
     config.baseUrl,
-    config.localConfig,
     config.refreshIntervalMs,
     config.trackDecisions,
     config.decisionDeduplicationTtlMs,
     config.exposureSessionTtlMs,
     config.eventBatchSize,
     config.eventFlushIntervalMs,
-    config.plugins,
-    config.assignmentLogger,
-    config.eventLogger,
     config.disableCloudEvents,
     config.deduplicateAssignmentLogger,
   ]);

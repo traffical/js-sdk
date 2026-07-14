@@ -22,8 +22,6 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { readFileSync } from "node:fs";
-import { resolve as resolvePath } from "node:path";
 
 import { ProviderEvents, TargetingKeyMissingError } from "@openfeature/web-sdk";
 import type { ConfigBundle, DecisionResult, Context, ParameterValue } from "@traffical/core";
@@ -35,6 +33,11 @@ import {
 
 import { TrafficalWebProvider, type TrafficalWebClient } from "./provider.js";
 
+// Fixtures are resolved via a portable multi-root loader (installed
+// @traffical/sdk-spec >= 0.7.0, else the sibling sdk-spec checkout) instead of a
+// brittle hard-coded ../../../../sdk-spec sibling path — see spec-fixtures.ts.
+import { loadFixture } from "./spec-fixtures.js";
+
 // Polyfill window for the Bun test env (mirrors other js-client tests).
 if (typeof globalThis.window === "undefined") {
   (globalThis as any).window = globalThis;
@@ -43,15 +46,6 @@ if (typeof globalThis.window === "undefined") {
 // =============================================================================
 // Fixtures / helpers
 // =============================================================================
-
-const FIXTURES_DIR = resolvePath(
-  import.meta.dir,
-  "../../../../sdk-spec/test-vectors/fixtures",
-);
-
-function loadFixture<T>(name: string): T {
-  return JSON.parse(readFileSync(resolvePath(FIXTURES_DIR, name), "utf8")) as T;
-}
 
 /** A minimal bundle used by the structural-stub-free real-client tests. */
 const singleLayerBundle: ConfigBundle = {

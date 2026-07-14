@@ -62,6 +62,12 @@ export interface TrafficalServerClient extends TrafficalClientLike {
   flushEvents?(): Promise<void>;
   destroy?(): Promise<void> | void;
   /**
+   * Canonical single teardown verb (spec 0.7.0 design contract). Awaits a final
+   * event flush before returning. The `@traffical/node` client now exposes this
+   * alongside the deprecated `destroy()`; `onClose()` prefers it (see below).
+   */
+  close?(): Promise<void> | void;
+  /**
    * Optional accessor some clients expose for the configured evaluation mode.
    * v1 supports `"bundle"` only (design §7.4); a `"server"`-mode client is
    * warned about because it resolves with an empty context.
@@ -199,7 +205,14 @@ export class TrafficalServerProvider implements Provider, Tracking {
     if (this.closed) return;
     this.closed = true;
     this.initialized = false;
-    // Flush-then-dispose (design §7.2). Both are optional/feature-detected.
+    // Flush-then-dispose (design §7.2). Prefer the canonical `close()` (which
+    // itself awaits a final flush per the 0.7.0 contract); fall back to the
+    // deprecated `flushEvents()` + `destroy()` for leaner/older clients. All
+    // optional and feature-detected.
+    if (typeof this.client.close === "function") {
+      await this.client.close();
+      return;
+    }
     await this.client.flushEvents?.();
     await this.client.destroy?.();
   }

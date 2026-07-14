@@ -1085,7 +1085,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   }
 
   private async _fetchConfig(): Promise<void> {
-    const url = `${this._options.baseUrl}/v1/config/${this._options.projectId}?env=${this._options.env}`;
+    // URL-encode path/query components so an env or projectId containing
+    // reserved characters (spaces, &, ?, /) can't corrupt the request URL.
+    const url = `${this._options.baseUrl}/v1/config/${encodeURIComponent(
+      this._options.projectId
+    )}?env=${encodeURIComponent(this._options.env)}`;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",

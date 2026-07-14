@@ -19,8 +19,8 @@
     "build": "bun run generate-version && tsc",
     "generate-version": "bun run ../../scripts/generate-version.ts",
     "dev": "tsc --watch",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "test": "bun run generate-version && bun test",
+    "typecheck": "bun run generate-version && tsc --noEmit"
   },
   "dependencies": {
     "@traffical/core": "0.10.0",

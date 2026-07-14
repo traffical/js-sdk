@@ -1,6 +1,11 @@
 node_modules/
 dist/
 *.tgz
+
+# Generated at build time from package.json (scripts/generate-version.ts).
+# Committing it lets the stamped sdkVersion drift out of sync with the
+# published version — always regenerate instead.
+packages/*/src/version.ts
 .DS_Store
 *.log
 .env

@@ -51,9 +51,16 @@ function createTrafficalContextState(
   let client = $state<TrafficalClient | null>(null);
   let ready = $state(!!config.initialBundle); // Ready immediately if we have initial bundle
   let error = $state<Error | null>(null);
-  let bundle = $state(config.initialBundle ?? null);
+  // Seed the tracked bundle from an SSR initialBundle OR a build-time localConfig
+  // so first-render resolution has config; it is then kept in sync with the
+  // client's fetched/refreshed bundle via the onConfigUpdate hook below.
+  let bundle = $state(config.initialBundle ?? config.localConfig ?? null);
   let overrideUnitKey = $state<string | null>(null);
   let overrideVersion = $state(0);
+  // Bumped whenever the client's config changes (fetch / background refresh) so
+  // hooks can recompute. Also drives the config-change listener list.
+  let configVersion = $state(0);
+  const configListeners = new Set<() => void>();
 
   // Initialize client only in browser
   // NOTE: We create the client but DO NOT call initialize() here.
@@ -91,6 +98,20 @@ function createTrafficalContextState(
 
     client = clientInstance;
 
+    // Keep the tracked `bundle` in sync with the client's config. The client
+    // fires onConfigUpdate after the initial fetch AND every background refresh
+    // (mirrors how the openfeature-web provider hangs a listener off the same
+    // hook). This is what lets a CSR provider WITHOUT an initialBundle resolve
+    // real params once the first fetch lands.
+    clientInstance.use({
+      name: "traffical-svelte-config-sync",
+      onConfigUpdate: (nextBundle) => {
+        bundle = nextBundle;
+        configVersion++;
+        for (const cb of configListeners) cb();
+      },
+    });
+
     // Subscribe to identity changes from client.identify()
     clientInstance.onIdentityChange((newKey: string) => {
       overrideUnitKey = newKey;
@@ -117,8 +138,13 @@ function createTrafficalContextState(
         apiKey: config.apiKey,
         localConfig: config.initialBundle,
         storage,
-        // Disable background operations on server
+        // Disable ALL background/timer work on the server so a per-request
+        // client can't leak the refresh/flush timers into the SSR process, and
+        // so it never emits throwaway decision events for a render that is
+        // immediately discarded. The browser re-decides and tracks on hydration.
         refreshIntervalMs: 0,
+        eventFlushIntervalMs: 0,
+        trackDecisions: false,
         // BYO pipeline (warehouse-native)
         assignmentLogger: config.assignmentLogger,
         eventLogger: config.eventLogger,
@@ -145,6 +171,15 @@ function createTrafficalContextState(
   function getContext(): TrafficalContext {
     const unitKey = getUnitKey();
     const additionalContext = config.contextFn?.() ?? {};
+
+    // Project identity onto the bundle's REAL unit-key field so a custom
+    // `hashing.unitKey` (e.g. "visitorId", "accountId") buckets correctly —
+    // mirrors @traffical/openfeature-core. Before the bundle loads,
+    // getUnitKeyField() is null; fall back to the common field names.
+    const unitKeyField = client?.getUnitKeyField?.() ?? null;
+    if (unitKeyField) {
+      return { ...additionalContext, [unitKeyField]: unitKey };
+    }
 
     return {
       ...additionalContext,
@@ -191,6 +226,18 @@ function createTrafficalContextState(
     initialParams: config.initialParams,
     get overrideVersion() {
       return overrideVersion;
+    },
+    get configVersion() {
+      return configVersion;
+    },
+    /**
+     * Subscribe to client config changes (initial fetch + background refresh).
+     * Returns an unsubscribe function. Used by hooks to recompute params/decision
+     * once the CSR bundle lands. No-op on the server (no client fetch).
+     */
+    onConfigChange(cb: () => void): () => void {
+      configListeners.add(cb);
+      return () => configListeners.delete(cb);
     },
   };
 }

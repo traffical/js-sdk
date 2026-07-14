@@ -85,7 +85,41 @@ const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 const OFFLINE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
+const MALFORMED_BUNDLE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
 const DECISION_CACHE_MAX_SIZE = 100; // Max decisions to cache for attribution lookup
+/** +/-10% jitter on the background refresh interval to avoid thundering-herd sync. */
+const REFRESH_JITTER_RATIO = 0.1;
+
+/** Returns `intervalMs` perturbed by uniform +/-REFRESH_JITTER_RATIO jitter. */
+function jitteredInterval(intervalMs: number): number {
+  const delta = intervalMs * REFRESH_JITTER_RATIO;
+  return intervalMs + (Math.random() * 2 - 1) * delta;
+}
+
+/**
+ * Structural guard for a fetched config bundle. A 200 response can still carry a
+ * malformed body (truncated CDN write, partial deploy); serving it would corrupt
+ * every bucket assignment. Requires the hashing config the resolver depends on
+ * (`unitKey` non-empty, `bucketCount` an integer >= 1) plus the top-level
+ * parameters/layers arrays.
+ */
+function isValidConfigBundle(bundle: unknown): bundle is ConfigBundle {
+  if (!bundle || typeof bundle !== "object") return false;
+  const b = bundle as Partial<ConfigBundle>;
+  if (!Array.isArray(b.parameters)) return false;
+  if (!Array.isArray(b.layers)) return false;
+  const hashing = b.hashing as Partial<ConfigBundle["hashing"]> | undefined;
+  if (!hashing || typeof hashing !== "object") return false;
+  if (typeof hashing.unitKey !== "string" || hashing.unitKey.length === 0) return false;
+  if (
+    typeof hashing.bucketCount !== "number" ||
+    !Number.isInteger(hashing.bucketCount) ||
+    hashing.bucketCount < 1
+  ) {
+    return false;
+  }
+  return true;
+}
 
 // =============================================================================
 // Types
@@ -214,6 +248,7 @@ interface ClientState {
   etag: string | null;
   lastFetchTime: number;
   lastOfflineWarning: number;
+  lastMalformedWarning: number;
   refreshTimer: ReturnType<typeof setInterval> | null;
   isInitialized: boolean;
   /** Cached server resolve response (server mode only) */
@@ -240,6 +275,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     etag: null,
     lastFetchTime: 0,
     lastOfflineWarning: 0,
+    lastMalformedWarning: 0,
     refreshTimer: null,
     isInitialized: false,
     serverResponse: null,
@@ -1124,6 +1160,14 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       const bundle = (await response.json()) as ConfigBundle;
       const etag = response.headers.get("ETag");
 
+      // A 200 can still carry a malformed body. Discard it and keep the
+      // previous last-good bundle rather than corrupting bucket assignments or
+      // falling through to defaults when we already have a valid config.
+      if (!isValidConfigBundle(bundle)) {
+        this._logMalformedBundleWarning();
+        return;
+      }
+
       this._state.bundle = bundle;
       this._state.etag = etag;
       this._state.lastFetchTime = Date.now();
@@ -1152,13 +1196,22 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
     if (interval <= 0) return;
 
-    this._state.refreshTimer = setInterval(() => {
-      if (this._options.evaluationMode === "server") {
-        this._fetchServerResolve().catch(() => {});
-      } else {
-        this._fetchConfig().catch(() => {});
-      }
-    }, interval);
+    // Reschedule via setTimeout with fresh +/-10% jitter each tick (instead of a
+    // fixed setInterval) so fleets of clients don't converge on the same refresh
+    // instant and stampede the edge.
+    const scheduleNext = () => {
+      this._state.refreshTimer = setTimeout(() => {
+        // Schedule the next tick before firing so cadence stays independent of
+        // fetch latency (matching the previous fire-and-forget setInterval).
+        scheduleNext();
+        if (this._options.evaluationMode === "server") {
+          this._fetchServerResolve().catch(() => {});
+        } else {
+          this._fetchConfig().catch(() => {});
+        }
+      }, jitteredInterval(interval));
+    };
+    scheduleNext();
   }
 
   /**
@@ -1278,6 +1331,16 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         `[Traffical] Failed to fetch config: ${error instanceof Error ? error.message : String(error)}. Using ${this._state.bundle ? "cached" : "local"} config.`
       );
       this._state.lastOfflineWarning = now;
+    }
+  }
+
+  private _logMalformedBundleWarning(): void {
+    const now = Date.now();
+    if (now - this._state.lastMalformedWarning > MALFORMED_BUNDLE_WARNING_INTERVAL_MS) {
+      console.warn(
+        `[Traffical] Discarded malformed config bundle (invalid hashing/shape). Using ${this._state.bundle ? "cached" : "local"} config.`
+      );
+      this._state.lastMalformedWarning = now;
     }
   }
 

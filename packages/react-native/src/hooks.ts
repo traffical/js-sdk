@@ -14,14 +14,27 @@ import { useTrafficalContext } from "./context.js";
 // Internal Utilities
 // =============================================================================
 
-function createStableKey(obj: unknown): string {
-  if (obj === null || obj === undefined) {
-    return String(obj);
+/**
+ * Recursively sorts object keys at EVERY level so nested context/defaults
+ * objects produce a stable, order-independent key. (The previous implementation
+ * used `JSON.stringify(obj, Object.keys(obj).sort())`, whose array replacer only
+ * allowlists top-level keys and never reorders nested objects — so changes to a
+ * nested value were missed.)
+ */
+function createStableKey(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? String(value);
   }
-  if (typeof obj !== "object") {
-    return String(obj);
+  if (Array.isArray(value)) {
+    return "[" + value.map(createStableKey).join(",") + "]";
   }
-  return JSON.stringify(obj, Object.keys(obj as object).sort());
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return (
+    "{" +
+    keys.map((k) => JSON.stringify(k) + ":" + createStableKey(obj[k])).join(",") +
+    "}"
+  );
 }
 
 function useStableObject<T>(obj: T): T {

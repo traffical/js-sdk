@@ -745,6 +745,25 @@ export interface DecideOptions<T extends Record<string, ParameterValue> = Record
 }
 
 /**
+ * Canonical options bag for the `track(event, properties?, options?)` method
+ * (spec 0.7.0 design contract). Every field is optional; using a single bag
+ * (rather than positional trailing args) is what lets `values` and
+ * `eventTimestamp` exist consistently across all SDKs.
+ */
+export interface TrackEventOptions {
+  /** Link this event to a prior decide() for attribution. */
+  decisionId?: Id;
+  /** Override the unit for this event. */
+  unitKey?: string;
+  /** Single numeric value (e.g. revenue). Falls back to `properties.value`. */
+  value?: number;
+  /** Multiple named numeric values for multi-objective optimization. */
+  values?: Record<string, number>;
+  /** Explicit event time (ISO 8601); defaults to "now" when omitted. */
+  eventTimestamp?: Timestamp;
+}
+
+/**
  * Options for tracking an event.
  */
 export interface TrackOptions {

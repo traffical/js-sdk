@@ -20,6 +20,9 @@ import {
   type ParameterValue,
   type TrafficalClientOptions as CoreClientOptions,
   type TrackOptions,
+  type TrackEventOptions,
+  type DecideOptions,
+  type GetParamsOptions,
   type ExposureEvent,
   type TrackEvent,
   type TrackAttribution,
@@ -39,6 +42,7 @@ import {
   generateExposureId,
   generateTrackEventId,
   generateAssignmentId,
+  generateDecisionId,
 } from "@traffical/core";
 
 import { DecisionClient } from "@traffical/core-io";
@@ -51,6 +55,23 @@ import { SDK_VERSION } from "./version.js";
 // =============================================================================
 
 const SDK_NAME = "node";
+
+/**
+ * Normalizes evaluation-method arguments so both the canonical positional form
+ * `decide(context, defaults)` and the legacy object-bag form
+ * `decide({ context, defaults })` work. Positional is detected by the presence
+ * of the second (`defaults`) argument; the bag form is soft-deprecated.
+ */
+function normalizeEvalArgs<T extends Record<string, ParameterValue>>(
+  contextOrOptions: Context | { context: Context; defaults: T },
+  maybeDefaults?: T
+): { context: Context; defaults: T } {
+  if (maybeDefaults !== undefined) {
+    return { context: contextOrOptions as Context, defaults: maybeDefaults };
+  }
+  const bag = contextOrOptions as { context: Context; defaults: T };
+  return { context: bag.context, defaults: bag.defaults };
+}
 
 const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
@@ -90,6 +111,11 @@ export interface TrafficalClientOptions extends CoreClientOptions {
    * Event flush interval in milliseconds (default: 30000).
    */
   eventFlushIntervalMs?: number;
+  /**
+   * Maximum number of events buffered in memory before the oldest is dropped
+   * (default: 1000). Bounds memory in long-lived server processes.
+   */
+  eventMaxQueueSize?: number;
   /**
    * Timeout in milliseconds for SDK network requests — the config bundle
    * fetch and event batch POSTs (default: 10000).
@@ -221,6 +247,13 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _exposureSessionTtlMs: number;
   /** Cache of recent decisions for attribution lookup on rewards */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
+  /** Serialized context of the last server-mode resolve (per-call throttle). */
+  private _lastResolveContextKey: string | null = null;
+  /** Resolves once the first config load attempt completes (fail-open). */
+  private _readyResolve!: () => void;
+  private readonly _readyPromise: Promise<void> = new Promise((resolve) => {
+    this._readyResolve = resolve;
+  });
 
   constructor(options: TrafficalClientOptions) {
     this._options = {
@@ -264,6 +297,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       apiKey: options.apiKey,
       batchSize: options.eventBatchSize,
       flushIntervalMs: options.eventFlushIntervalMs,
+      maxQueueSize: options.eventMaxQueueSize,
       requestTimeoutMs: options.requestTimeoutMs,
       debug: options.debugEvents,
       onError: (error) => {
@@ -305,10 +339,29 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     }
     this._startBackgroundRefresh();
     this._state.isInitialized = true;
+    this._readyResolve();
+  }
+
+  /**
+   * Resolves once the first usable config has loaded (or the SDK has failed
+   * open on an unavailable/malformed bundle). Never rejects.
+   */
+  async waitForReady(): Promise<void> {
+    return this._readyPromise;
+  }
+
+  /**
+   * Single teardown verb (spec 0.7.0 design contract). Stops background
+   * refresh and awaits a final event flush before returning.
+   */
+  async close(): Promise<void> {
+    await this.destroy();
   }
 
   /**
    * Stops background refresh and cleans up resources.
+   *
+   * @deprecated Use {@link close} instead — the canonical single teardown verb.
    */
   async destroy(): Promise<void> {
     if (this._state.refreshTimer) {
@@ -322,7 +375,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
   /**
    * Synchronous destroy for process exit handlers.
-   * Use destroy() when possible for proper cleanup.
+   *
+   * @deprecated Use {@link close} instead. This best-effort variant does not
+   * await the final flush; prefer `await close()` where you can.
    */
   destroySync(): void {
     if (this._state.refreshTimer) {
@@ -384,10 +439,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * 3. Local config (if remote unavailable)
    * 4. Caller defaults
    */
-  getParams<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): T {
+  getParams<T extends Record<string, ParameterValue>>(context: Context, defaults: T): T;
+  /** @deprecated Pass `(context, defaults)` positionally (spec 0.7.0 contract). */
+  getParams<T extends Record<string, ParameterValue>>(options: GetParamsOptions<T>): T;
+  getParams<T extends Record<string, ParameterValue>>(
+    contextOrOptions: Context | GetParamsOptions<T>,
+    maybeDefaults?: T
+  ): T {
+    const { context, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
+
     // Server mode: return from cached server response
     if (this._options.evaluationMode === "server" && this._state.serverResponse) {
-      const result = { ...options.defaults } as Record<string, ParameterValue>;
+      // Thread THIS call's context into a per-call resolve so the cached
+      // snapshot converges to the context actually being evaluated (server
+      // mode can't block a sync getParams() on the network; degrade to the
+      // last-good snapshot for the current call).
+      this._maybeResolveForContext(context);
+      const result = { ...defaults } as Record<string, ParameterValue>;
       for (const [key, value] of Object.entries(this._state.serverResponse.assignments)) {
         if (key in result) {
           result[key] = value;
@@ -397,7 +465,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     }
 
     const bundle = this._getEffectiveBundle();
-    return resolveParameters<T>(bundle, options.context, options.defaults);
+    return resolveParameters<T>(bundle, context, defaults);
   }
 
   /**
@@ -406,20 +474,34 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * When trackDecisions is enabled (default), automatically sends a DecisionEvent
    * to the backend for intent-to-treat analysis.
    */
-  decide<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): DecisionResult {
+  decide<T extends Record<string, ParameterValue>>(context: Context, defaults: T): DecisionResult;
+  /** @deprecated Pass `(context, defaults)` positionally (spec 0.7.0 contract). */
+  decide<T extends Record<string, ParameterValue>>(options: DecideOptions<T>): DecisionResult;
+  decide<T extends Record<string, ParameterValue>>(
+    contextOrOptions: Context | DecideOptions<T>,
+    maybeDefaults?: T
+  ): DecisionResult {
     const start = Date.now();
+    const { context, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
 
     // Server mode: return from cached server response
     if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+      // Thread THIS call's context into a per-call resolve so the snapshot
+      // converges to the evaluated context (sync decide() can't block on the
+      // network; degrade to the last-good snapshot for the current call).
+      this._maybeResolveForContext(context);
       const resp = this._state.serverResponse;
-      const assignments = { ...options.defaults } as Record<string, ParameterValue>;
+      const assignments = { ...defaults } as Record<string, ParameterValue>;
       for (const [key, value] of Object.entries(resp.assignments)) {
         if (key in assignments) {
           assignments[key] = value;
         }
       }
       const decision: DecisionResult = {
-        decisionId: resp.decisionId,
+        // Mint a FRESH decisionId per call — never reuse the resolve
+        // response's decisionId across decisions (each decide() is a distinct
+        // decision for attribution).
+        decisionId: generateDecisionId(),
         assignments,
         // Snapshot the resolve stateVersion at decision time so events
         // built later stamp the version this decision was evaluated
@@ -428,20 +510,20 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       };
       this._cacheDecision(decision);
       if (this._options.trackDecisions) {
-        this._trackDecision(decision, Date.now() - start, Object.keys(options.defaults));
+        this._trackDecision(decision, Date.now() - start, Object.keys(defaults));
       }
       this._emitAssignmentLogEntries(decision, "decision");
       return decision;
     }
 
     const bundle = this._getEffectiveBundle();
-    const decision = coreDecide<T>(bundle, options.context, options.defaults);
+    const decision = coreDecide<T>(bundle, context, defaults);
     const latencyMs = Date.now() - start;
 
     this._cacheDecision(decision);
 
     if (this._options.trackDecisions) {
-      this._trackDecision(decision, latencyMs, Object.keys(options.defaults));
+      this._trackDecision(decision, latencyMs, Object.keys(defaults));
     }
 
     this._emitAssignmentLogEntries(decision, "decision");
@@ -540,9 +622,15 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   track<E extends Extract<keyof TEvents, string>>(
     event: E,
     properties?: TEvents[E],
-    options?: { decisionId?: string; unitKey?: string }
+    options?: TrackEventOptions
   ): void {
-    const value = typeof properties?.value === 'number' ? properties.value : undefined;
+    // Single numeric value: explicit options.value wins, else properties.value.
+    const value =
+      typeof options?.value === "number"
+        ? options.value
+        : typeof properties?.value === "number"
+          ? properties.value
+          : undefined;
 
     // Auto-populate attribution from cached decision if available
     const attribution = this._getAttributionFromCache(options?.decisionId);
@@ -557,9 +645,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       timestamp: new Date().toISOString(),
       event,
       value,
+      values: options?.values,
       properties,
       decisionId: options?.decisionId,
       attribution,
+      eventTimestamp: options?.eventTimestamp,
       sdkName: SDK_NAME,
       sdkVersion: SDK_VERSION,
     };
@@ -573,10 +663,17 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * If decisionId is provided and the decision is cached, attribution is auto-populated.
    */
   trackReward(options: TrackOptions): void {
-    // Map old API to new track() API — cast through the untyped signature
-    (this.track as (event: string, properties?: Record<string, unknown>, options?: { decisionId?: string }) => void)(
-      options.event, options.properties, { decisionId: undefined }
-    );
+    // Forward the value and decisionId (previously dropped) plus any secondary
+    // values, so rewards still carry their optimization signal + attribution.
+    (this.track as (
+      event: string,
+      properties?: Record<string, unknown>,
+      options?: TrackEventOptions
+    ) => void)(options.event, options.properties, {
+      decisionId: options.decisionId,
+      value: options.value,
+      values: options.values,
+    });
   }
 
   // ===========================================================================
@@ -722,6 +819,26 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   /**
    * Logs an offline warning (rate-limited).
    */
+  /**
+   * Server mode: threads the per-call context into a background /v1/resolve so
+   * the cached snapshot converges to the contexts actually being evaluated.
+   * Throttled by serialized context so repeated identical contexts (the common
+   * case) don't hammer the edge. Because decide()/getParams() are synchronous
+   * they cannot await this; the current call degrades to the last-good snapshot
+   * and subsequent calls pick up the refreshed resolution.
+   */
+  private _maybeResolveForContext(context: Context): void {
+    let key: string;
+    try {
+      key = JSON.stringify(context);
+    } catch {
+      key = "";
+    }
+    if (key === this._lastResolveContextKey) return;
+    this._lastResolveContextKey = key;
+    void this._fetchServerResolve(context);
+  }
+
   private async _fetchServerResolve(context: Context): Promise<void> {
     try {
       const response = await this._decisionClient.resolve({ context });

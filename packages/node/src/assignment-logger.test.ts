@@ -79,7 +79,10 @@ describe("Node TrafficalClient assignmentLogger", () => {
     expect(entry.type).toBe("decision");
     expect(entry.policyId).toBe("pol_1");
     expect(entry.allocationName).toBe("treatment");
-    expect(entry.decisionId).toBe("dec_server_1");
+    // Server mode now mints a FRESH decisionId per decide() (spec 0.7.0 S8) —
+    // it no longer reuses the resolve response's decisionId across decisions.
+    expect(entry.decisionId).toMatch(/^dec_/);
+    expect(entry.decisionId).not.toBe("dec_server_1");
     expect(entry.anonymousId).toBeUndefined();
     expect(entry.id).toMatch(/^asn_/);
     // Warehouse-native passthrough fields from the layer resolution.

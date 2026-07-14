@@ -192,8 +192,6 @@ describe("Node TrafficalClient eventLogger", () => {
     });
     await client.initialize();
 
-    const callsAfterInit = fetchMock.mock.calls.length;
-
     const decision = client.decide({
       context: { userId: "user-1" },
       defaults: { "ui.color": "#000" },
@@ -201,8 +199,13 @@ describe("Node TrafficalClient eventLogger", () => {
     client.trackExposure(decision);
     await client.flushEvents();
 
-    // No additional fetch calls for event delivery (only resolve happened at init).
-    expect(fetchMock.mock.calls.length).toBe(callsAfterInit);
+    // No fetch calls to the EVENT-delivery endpoint (disableCloudEvents). A
+    // per-call /v1/resolve may fire in server mode, but nothing hits
+    // /v1/events/batch.
+    const eventBatchCalls = fetchMock.mock.calls.filter((c) =>
+      String((c as unknown[])[0]).includes("/v1/events")
+    );
+    expect(eventBatchCalls).toHaveLength(0);
     expect(events.length).toBeGreaterThan(0);
 
     await client.destroy();

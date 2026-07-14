@@ -15,7 +15,7 @@ import { render, screen, cleanup, act, waitFor } from "@testing-library/react";
 import type { ConfigBundle, TrackableEvent } from "@traffical/core";
 import type { TrafficalPlugin } from "@traffical/js-client";
 import { TrafficalProvider } from "../provider.js";
-import { useTraffical, useTrafficalClient } from "../hooks.js";
+import { useTraffical, useTrafficalClient, createStableKey } from "../hooks.js";
 
 const bundle: ConfigBundle = {
   version: "2026-07-01T00:00:00Z",
@@ -105,6 +105,31 @@ function Cta({ tracking }: { tracking?: "full" | "decision" | "none" }) {
     </div>
   );
 }
+
+describe("createStableKey (dependency-key stringify)", () => {
+  // The previous top-level-only replacer missed nested changes; the recursive
+  // sorted stringify must detect them and stay order-independent.
+  test("detects a change in a nested context/defaults value", () => {
+    expect(createStableKey({ user: { plan: "free" } })).not.toBe(
+      createStableKey({ user: { plan: "pro" } })
+    );
+    expect(createStableKey({ a: { b: { c: 1 } } })).not.toBe(
+      createStableKey({ a: { b: { c: 2 } } })
+    );
+  });
+
+  test("is stable across top-level and nested key ordering", () => {
+    expect(createStableKey({ x: 1, n: { p: 1, q: 2 } })).toBe(
+      createStableKey({ n: { q: 2, p: 1 }, x: 1 })
+    );
+  });
+
+  test("detects nested array element changes", () => {
+    expect(createStableKey({ tags: ["a", "b"] })).not.toBe(
+      createStableKey({ tags: ["a", "c"] })
+    );
+  });
+});
 
 describe("@traffical/react provider + hooks", () => {
   test("resolves synchronously from localConfig (no default flicker)", async () => {

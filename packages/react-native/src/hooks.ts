@@ -21,7 +21,7 @@ import { useTrafficalContext } from "./context.js";
  * allowlists top-level keys and never reorders nested objects — so changes to a
  * nested value were missed.)
  */
-function createStableKey(value: unknown): string {
+export function createStableKey(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value) ?? String(value);
   }

@@ -31,7 +31,7 @@ import { useTrafficalContext } from "./context.js";
  * allowlists top-level keys and never reorders nested objects — so changes to a
  * nested value were missed and top-level key reordering churned the ref.)
  */
-function createStableKey(value: unknown): string {
+export function createStableKey(value: unknown): string {
   if (value === null || typeof value !== "object") {
     // Primitives, null, undefined, functions. JSON.stringify(undefined) and
     // JSON.stringify(fn) are `undefined`, so fall back to a stable token.

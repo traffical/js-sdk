@@ -142,26 +142,23 @@ describe("TrafficalClient server mode", () => {
       defaults: { "ui.color": "#000" },
     });
 
-    expect(decision.decisionId).toBe("dec_server_1");
+    // Server mode now mints a FRESH decisionId per decide() (spec 0.7.0 S8)
+    // rather than reusing the resolve response's decisionId.
+    expect(decision.decisionId).toMatch(/^dec_/);
+    expect(decision.decisionId).not.toBe("dec_server_1");
     expect(decision.assignments["ui.color"]).toBe("#F00");
     expect(decision.metadata.layers).toHaveLength(1);
     expect(decision.metadata.layers[0].policyId).toBe("pol_1");
   });
 
   test("refreshConfig() re-calls resolve in server mode", async () => {
-    let callCount = 0;
-    const responses = [
-      serverResolveResponse,
-      {
-        ...serverResolveResponse,
-        decisionId: "dec_server_2",
-        assignments: { "ui.color": "#0F0", "pricing.discount": 25 },
-      },
-    ];
+    // The current resolve response is controlled by a mutable variable rather
+    // than call-ordering, because in server mode getParams()/decide() also
+    // trigger a per-call resolve (spec 0.7.0 S8) in addition to init/refresh.
+    let current: typeof serverResolveResponse = serverResolveResponse;
 
     fetchMock = mock(async () => {
-      const resp = responses[callCount] ?? responses[0];
-      callCount++;
+      const resp = current;
       return {
         ok: true,
         status: 200,
@@ -185,6 +182,12 @@ describe("TrafficalClient server mode", () => {
     });
     expect(params["ui.color"]).toBe("#F00");
 
+    // Publish a new resolution and force a refresh; the snapshot updates.
+    current = {
+      ...serverResolveResponse,
+      decisionId: "dec_server_2",
+      assignments: { "ui.color": "#0F0", "pricing.discount": 25 },
+    };
     await client.refreshConfig();
 
     params = client.getParams({
@@ -267,7 +270,9 @@ describe("TrafficalClient assignmentLogger", () => {
     expect(entry.type).toBe("decision");
     expect(entry.policyId).toBe("pol_1");
     expect(entry.allocationName).toBe("treatment");
-    expect(entry.decisionId).toBe("dec_server_1");
+    // Fresh decisionId per decide() in server mode (spec 0.7.0 S8).
+    expect(entry.decisionId).toMatch(/^dec_/);
+    expect(entry.decisionId).not.toBe("dec_server_1");
     expect(typeof entry.anonymousId).toBe("string");
     expect(entry.id).toMatch(/^asn_/);
   });

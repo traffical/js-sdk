@@ -373,15 +373,38 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
     // LayerResolution row (with `bucket = -1`) so decision events record the
     // skipped layer, but no bucket-based policy can match.
     const layerUnitKey = layer.unitKey;
-    const layerUnitValue = layerUnitKey
-      ? String(context[layerUnitKey] ?? "")
+    const hasOverride = layerUnitKey !== undefined && layerUnitKey !== null;
+
+    // S1: an empty or whitespace-only layer `unitKey` override is INVALID
+    // configuration. Skip the layer entirely — emit a bare skipped row
+    // (bucket -1, with NO unitKey/unitKeyValue metadata), match no policy,
+    // leave the layer's parameters at their defaults, and record no exposure.
+    // We MUST NOT fall back to the project-level unit key, and MUST NOT use
+    // the blank override string as a context lookup key. (This engine
+    // previously treated "" as falsy and fell back to the project key — the
+    // 1-of-4 outlier corrected here per spec 0.7.0 S1.)
+    if (hasOverride && String(layerUnitKey).trim() === "") {
+      layers.push({
+        layerId: layer.id,
+        bucket: -1,
+        ...(hasParams ? {} : { attributionOnly: true }),
+      });
+      continue;
+    }
+
+    // A valid override reads a different context field; otherwise bucket on
+    // the project-level unit value. A valid override naming a field that is
+    // absent from the context likewise skips the layer (bucket -1) for the
+    // missing-value reason, but its unitKey is still recorded for audit.
+    const layerUnitValue = hasOverride
+      ? String(context[layerUnitKey as string] ?? "")
       : projectUnitKeyValue;
 
     if (!layerUnitValue) {
       layers.push({
         layerId: layer.id,
         bucket: -1,
-        ...(layerUnitKey ? { unitKey: layerUnitKey, unitKeyValue: "" } : {}),
+        ...(hasOverride ? { unitKey: layerUnitKey, unitKeyValue: "" } : {}),
         ...(hasParams ? {} : { attributionOnly: true }),
       });
       continue;
@@ -425,13 +448,14 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
           matchedPolicy = policy;
           matchedAllocation = ctxResolution.allocation;
           matchedProbability = ctxResolution.probability;
-          // Model timestamp of the coefficients used: prefer the bundle
-          // model's generatedAt, then its modelVersion alias, then the
-          // policy stateVersion (bumped whenever the model is retrained).
+          // S7: model timestamp of the coefficients used is the bundle
+          // model's `generatedAt`, falling back only to its `modelVersion`
+          // alias. There is NO further fallback to `policy.stateVersion` — if
+          // both are absent we omit `modelVersion` entirely rather than emit a
+          // wrong label.
           matchedModelVersion =
             policy.contextualModel.generatedAt ??
-            policy.contextualModel.modelVersion ??
-            policy.stateVersion;
+            policy.contextualModel.modelVersion;
           matchedPolicies.push(policy);
           if (hasParams) {
             for (const [key, value] of Object.entries(ctxResolution.allocation.overrides)) {
@@ -556,7 +580,7 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       // Record the unit key only when the layer overrides the project
       // default — keeps the metadata small for the single-entity case while
       // making exposure events auditable in multi-entity projects.
-      ...(layerUnitKey ? { unitKey: layerUnitKey, unitKeyValue: layerUnitValue } : {}),
+      ...(hasOverride ? { unitKey: layerUnitKey, unitKeyValue: layerUnitValue } : {}),
       // Mark layers without requested parameters as attribution-only.
       // These are included in decision events and track-event attribution
       // but skipped by trackExposure() to avoid exposure inflation.

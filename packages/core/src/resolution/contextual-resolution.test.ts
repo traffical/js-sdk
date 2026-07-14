@@ -65,9 +65,10 @@ describe("contextual scoring resolution", () => {
     });
   }
 
-  test("decide records modelVersion from policy stateVersion for contextual selections", () => {
-    // The fixture bundle carries neither generatedAt nor stateVersion —
-    // build a copy with a stateVersion to verify the fallback.
+  test("S7: modelVersion is OMITTED (no stateVersion fallback) when both model timestamps are absent", () => {
+    // The fixture bundle carries neither generatedAt nor modelVersion. Even
+    // with a policy stateVersion present, spec 0.7.0 S7 forbids falling back
+    // to it — the SDK must omit modelVersion rather than emit a wrong label.
     const bundleWithStateVersion = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;
     bundleWithStateVersion.layers[0].policies[0].stateVersion = "2024-06-15T12:00:00.000Z";
 
@@ -78,7 +79,25 @@ describe("contextual scoring resolution", () => {
     );
 
     const heroLayer = decision.metadata.layers.find((l) => l.layerId === "layer_hero");
-    expect(heroLayer!.modelVersion).toBe("2024-06-15T12:00:00.000Z");
+    expect(heroLayer!.policyId).toBe("policy_contextual");
+    expect(heroLayer!.modelVersion).toBeUndefined();
+  });
+
+  test("S7: modelVersion falls back to the contextualModel.modelVersion alias (never stateVersion)", () => {
+    const bundleWithAlias = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;
+    // stateVersion present but must be ignored; the alias is the only fallback.
+    bundleWithAlias.layers[0].policies[0].stateVersion = "2024-06-15T12:00:00.000Z";
+    bundleWithAlias.layers[0].policies[0].contextualModel!.modelVersion =
+      "2024-06-18T00:00:00.000Z";
+
+    const decision = decide(
+      bundleWithAlias,
+      { userId: "user-high-engage", engagement_score: 8.0, device_type: "mobile" },
+      defaults
+    );
+
+    const heroLayer = decision.metadata.layers.find((l) => l.layerId === "layer_hero");
+    expect(heroLayer!.modelVersion).toBe("2024-06-18T00:00:00.000Z");
   });
 
   test("decide prefers the contextual model's generatedAt as modelVersion", () => {

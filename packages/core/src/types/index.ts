@@ -163,9 +163,9 @@ export interface BundleContextualModel {
   coefficients: Record<string, BundleAllocationCoefficients>;
   /**
    * Timestamp of the training run that produced these coefficients
-   * (the control plane's trainingSummary.generatedAt). When absent,
-   * the `modelVersion` alias and then the policy's `stateVersion` are
-   * used as the model version for exposure logging.
+   * (the control plane's trainingSummary.generatedAt). When absent, the
+   * `modelVersion` alias is used as the model version for exposure logging
+   * (spec 0.7.0 S7 — no further fallback to the policy's `stateVersion`).
    */
   generatedAt?: Timestamp;
   /**
@@ -415,8 +415,9 @@ export interface LayerResolution {
   /**
    * For linear_contextual policies: version timestamp of the trained model
    * whose coefficients produced this selection (the bundle model's
-   * `generatedAt`, falling back to its `modelVersion` alias, then to the
-   * policy's `stateVersion`). Omitted for all other policies.
+   * `generatedAt`, falling back only to its `modelVersion` alias — per spec
+   * 0.7.0 S7 there is NO fallback to the policy's `stateVersion`). Omitted for
+   * all other policies, and when both model timestamps are absent.
    */
   modelVersion?: string;
   /**

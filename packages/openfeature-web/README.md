@@ -18,10 +18,10 @@ Construct your Traffical browser client, wrap it in the provider, and set it on 
 
 ```ts
 import { OpenFeature } from "@openfeature/web-sdk";
-import { TrafficalWebClient as Client } from "@traffical/js-client";
+import { TrafficalClient } from "@traffical/js-client";
 import { TrafficalWebProvider } from "@traffical/openfeature-web";
 
-const client = new Client({ apiKey: "pk_...", /* ... */ });
+const client = new TrafficalClient({ apiKey: "pk_...", /* ... */ });
 
 await OpenFeature.setContext({ targetingKey: user.id, plan: user.plan });
 await OpenFeature.setProviderAndWait(new TrafficalWebProvider(client));

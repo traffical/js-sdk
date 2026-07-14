@@ -34,7 +34,7 @@
  *     defaults: { 'checkout.cta': 'Buy Now' },
  *   });
  *
- *   return { params: decision.values };
+ *   return { params: decision.assignments };
  * }
  * ```
  */

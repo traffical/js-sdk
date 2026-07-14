@@ -108,9 +108,19 @@ Then use it in your load functions:
 
 ```typescript
 // src/routes/+layout.server.ts
-export async function load({ locals }) {
+import { loadTrafficalBundle } from '@traffical/svelte/server';
+import { TRAFFICAL_API_KEY } from '$env/static/private';
+
+export async function load({ fetch }) {
+  const { bundle } = await loadTrafficalBundle({
+    orgId: 'org_123',
+    projectId: 'proj_456',
+    env: 'production',
+    apiKey: TRAFFICAL_API_KEY,
+    fetch,
+  });
   return {
-    traffical: { bundle: locals.traffical.getBundle() },
+    traffical: { bundle },
   };
 }
 ```
@@ -130,7 +140,7 @@ export async function load({ locals, cookies }) {
   });
 
   return {
-    checkoutParams: decision.values,
+    checkoutParams: decision.assignments,
   };
 }
 ```

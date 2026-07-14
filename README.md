@@ -31,8 +31,12 @@ import { TrafficalProvider, useTraffical } from '@traffical/react';
 function App() {
   return (
     <TrafficalProvider
-      apiKey="pk_..."
-      context={{ userId: 'user-123' }}
+      config={{
+        orgId: 'org_123',
+        projectId: 'proj_456',
+        env: 'production',
+        apiKey: 'pk_...',
+      }}
     >
       <MyComponent />
     </TrafficalProvider>
@@ -40,7 +44,9 @@ function App() {
 }
 
 function MyComponent() {
-  const { params, ready } = useTraffical();
+  const { params, ready } = useTraffical({
+    defaults: { 'button.text': 'Buy Now', 'button.color': '#000000' },
+  });
 
   if (!ready) return <div>Loading...</div>;
 
@@ -101,23 +107,45 @@ function MyScreen() {
 npm install @traffical/svelte
 ```
 
-```svelte
-<script>
-  import { TrafficalProvider, useTraffical } from '@traffical/svelte';
+Initialize the client once at the root of your app:
 
-  const traffical = useTraffical();
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script>
+  import { initTraffical } from '@traffical/svelte';
+
+  let { children } = $props();
+
+  initTraffical({
+    orgId: 'org_123',
+    projectId: 'proj_456',
+    env: 'production',
+    apiKey: 'pk_...',
+  });
 </script>
 
-<TrafficalProvider
-  apiKey="pk_..."
-  context={{ userId: 'user-123' }}
->
-  {#if $traffical.ready}
-    <button style:color={$traffical.params['button.color']}>
-      {$traffical.params['button.text']}
-    </button>
-  {/if}
-</TrafficalProvider>
+{@render children()}
+```
+
+Then resolve params in any child component:
+
+```svelte
+<!-- Button.svelte -->
+<script>
+  import { useTraffical } from '@traffical/svelte';
+
+  // `params` is a reactive proxy — safe to destructure. Access `ready`
+  // through the returned object (e.g. `t.ready`) to stay reactive.
+  const t = useTraffical({
+    defaults: { 'button.text': 'Buy Now', 'button.color': '#000000' },
+  });
+</script>
+
+{#if t.ready}
+  <button style:color={t.params['button.color']}>
+    {t.params['button.text']}
+  </button>
+{/if}
 ```
 
 ### Node.js
@@ -127,14 +155,21 @@ npm install @traffical/node
 ```
 
 ```typescript
-import { TrafficalClient } from '@traffical/node';
+import { createTrafficalClient } from '@traffical/node';
 
-const client = new TrafficalClient({
-  apiKey: 'sk_...',
+const client = await createTrafficalClient({
+  orgId: 'org_123',
+  projectId: 'proj_456',
+  env: 'production',
+  apiKey: process.env.TRAFFICAL_API_KEY!,
 });
 
-const decision = await client.decide({ userId: 'user-123' });
-console.log(decision.params);
+// decide(context, defaults) — context first (spec 0.7.0 contract).
+const decision = client.decide(
+  { userId: 'user-123' },
+  { 'button.text': 'Buy Now' }
+);
+console.log(decision.assignments);
 ```
 
 ## Key Features

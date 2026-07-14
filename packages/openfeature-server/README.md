@@ -21,7 +21,12 @@ import { OpenFeature } from "@openfeature/server-sdk";
 import { TrafficalClient } from "@traffical/node";
 import { TrafficalServerProvider } from "@traffical/openfeature-server";
 
-const client = new TrafficalClient({ apiKey: process.env.TRAFFICAL_API_KEY! });
+const client = new TrafficalClient({
+  orgId: "org_123",
+  projectId: "proj_456",
+  env: "production",
+  apiKey: process.env.TRAFFICAL_API_KEY!,
+});
 await OpenFeature.setProviderAndWait(new TrafficalServerProvider(client));
 
 const of = OpenFeature.getClient();

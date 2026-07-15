@@ -1,5 +1,83 @@
 # @traffical/js-client
 
+## 0.16.0
+
+### Minor Changes
+
+- 11f489e: Align the JS SDKs to the spec 0.7.0 drift-remediation contract.
+
+  **Contract behavior (`@traffical/core`)**
+
+  - **S1 — empty/whitespace layer `unitKey` override skips the layer.** An empty
+    or whitespace-only layer `unitKey` override is now treated as invalid: the
+    layer resolves to `bucket -1` with its parameters at defaults and no
+    exposure, and carries no `unitKey`/`unitKeyValue` metadata. The engine no
+    longer falls back to the project unit key (the previous 1-of-4 outlier
+    behavior).
+  - **S7 — no `stateVersion` fallback for contextual `modelVersion`.** It is now
+    `contextualModel.generatedAt ?? contextualModel.modelVersion`, and omitted
+    entirely when both are absent, rather than falling back to
+    `policy.stateVersion`.
+  - Verified S2 (canonical numeric unit-key stringify), S3 (strict-typed
+    conditions), S5 (omitted relational value never matches), and S6
+    (`safeGamma`/`effectiveFloor` guards) against the 0.7.0 conformance vectors.
+  - Added the canonical `TrackEventOptions` type.
+
+  **Event delivery (S8) — `@traffical/node`, `@traffical/js-client`**
+
+  - Bounded in-memory event queue with drop-oldest and a dropped-event counter
+    (`eventMaxQueueSize`, default 1000); no more unbounded requeue-on-failure.
+  - Node: per-batch exponential-backoff retry on transient failures; browser:
+    transient failures persisted for retry.
+  - HTTP 401 auth kill-switch permanently disables event delivery and clears the
+    queue for the process/session lifetime.
+
+  **Exposure shape (S4) — `@traffical/js-client`**
+
+  - `trackExposure()` emits ONE event per call carrying only newly-exposed,
+    non-`attributionOnly` layers (session dedup on by default), matching the Node
+    SDK — replacing the previous one-event-per-layer shape that carried the full
+    unfiltered layers array.
+
+  **Server mode (S8) — `@traffical/node`, `@traffical/js-client`**
+
+  - `decide()`/`getParams()` thread the per-call context into a throttled
+    `/v1/resolve` and mint a fresh `decisionId` per `decide()` instead of reusing
+    the resolve snapshot's `decisionId`.
+
+  **Public API (A1, additive / non-breaking)**
+
+  - `waitForReady()` and a single teardown verb `close()` (awaits the final
+    flush; `destroy()`/`destroySync()` deprecated via JSDoc).
+  - Positional `decide(context, defaults)` / `getParams(context, defaults)`
+    overloads that still accept the legacy `({ context, defaults })` bag
+    (soft-deprecated).
+  - `track()` options bag extended with `value` / `values` / `eventTimestamp`;
+    Node `trackReward()` now forwards `value` + `decisionId` (previously dropped).
+
+  **Other**
+
+  - URL-encode `env`/`projectId` in the config-fetch URL.
+  - `@traffical/core-io`: no API change (patch bump for the pinned spec).
+
+- 2a7e3b5: Add adapter-facing SDK primitives for wrapping the client behind an OpenFeature provider (and other adapters), plus Node/browser exposure parity:
+
+  - **`getUnitKeyField()`** — core `getUnitKeyField(bundle)`; method on the node and js-client clients. Returns the context field the bundle buckets on (`hashing.unitKey`), so an adapter can map an external targeting key onto the correct field instead of guessing (e.g. writing `targetingKey` when the project buckets on `userId`).
+  - **`getParameterLayerId(key)`** — core `getParameterLayerId(bundle, key)`; method on the node and js-client clients. Returns the layer a parameter belongs to, so an adapter resolving a single flag can select that flag's owning `LayerResolution`. (A single-key `decide()` returns a resolution for every matched layer — siblings flagged `attributionOnly` — so positional selection is unsafe.)
+  - **Node `trackExposure()` now matches the browser SDK**: it skips `attributionOnly` layers and deduplicates per `(unit, policy, allocation)` within a session (new `deduplicateExposures` / `exposureSessionTtlMs` options; default on / 30 min). Previously the Node SDK emitted a single exposure event carrying every matched layer with no session dedup, over-counting exposures for experiments a unit was only assigned to (for attribution) but not actually shown. **Behavior change for existing Node users:** server-side exposure events now reflect only the layers actually exposed.
+
+  All additions are backward-compatible at the API level.
+
+- 3484466: Propensity logging for off-policy training. Layer resolution entries gain optional `probability` (the chosen allocation's selection probability at decision time: floored-softmax probability for linear_contextual policies, bucket-range share for other adaptive policies, the entity weight actually used for per-entity bundle-mode policies; omitted for static policies, edge-resolved selections, and any value outside (0, 1]) and `modelVersion` (linear_contextual only: the bundle model's `generatedAt`, falling back to its `modelVersion` alias, then the policy `stateVersion`). Decision and exposure events gain optional top-level `configVersion` — the config bundle version the SDK evaluated against, snapshotted into the decision metadata at decide() time (server mode: the resolve response's `stateVersion`) and stamped onto events from that snapshot. `AssignmentLogEntry` gains optional `bucket`, `probability`, `modelVersion`, and `configVersion`, and the warehouse-native logger maps them to the `bucket`, `propensity`, `model_version`, and `config_version` row keys (matching the PHP SDK). New `resolveContextualPolicyDetailed` export returns the chosen allocation with its probability; `resolveContextualPolicy` is unchanged. All fields are additive and optional.
+
+### Patch Changes
+
+- Updated dependencies [11f489e]
+- Updated dependencies [2a7e3b5]
+- Updated dependencies [3484466]
+  - @traffical/core@0.11.0
+  - @traffical/core-io@0.6.1
+
 ## 0.15.0
 
 ### Minor Changes

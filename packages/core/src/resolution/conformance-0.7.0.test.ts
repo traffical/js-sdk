@@ -4,8 +4,7 @@
  * Wires the hand-authored 0.7.0 fixtures plus the previously-skipped unicode
  * and contextual-boundary vectors through the real resolution engine. Fixtures
  * are loaded via the portable loader (local sibling sdk-spec checkout on the
- * drift-remediation branch, or a published >= 0.7.0 package). See
- * ./spec-fixtures.ts and TODO(release) there.
+ * published >= 0.7.0 package). See ./spec-fixtures.ts.
  */
 import { describe, test, expect } from "bun:test";
 import { decide, resolveParameters } from "./engine.js";

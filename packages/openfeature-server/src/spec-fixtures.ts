@@ -12,8 +12,9 @@
  *      up from this file.
  *   3. The installed package's fixtures as a last resort (unchanged files).
  *
- * TODO(release): once @traffical/sdk-spec 0.7.0 is published and pinned, source
- * (1) always wins and the sibling-repo fallback (2) can be deleted.
+ * @traffical/sdk-spec 0.7.0 is published and pinned, so source (1) is
+ * authoritative; the sibling-repo fallback (2) is retained only for local work
+ * against an unreleased future spec branch.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

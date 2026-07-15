@@ -17,7 +17,7 @@
         "ulid": "^2.3.0",
       },
       "devDependencies": {
-        "@traffical/sdk-spec": "^0.5.0",
+        "@traffical/sdk-spec": "^0.7.0",
         "@types/bun": "latest",
         "ajv": "^8.17.1",
         "typescript": "^5.3.0",
@@ -85,7 +85,7 @@
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
         "@openfeature/server-sdk": "^1.22.0",
-        "@traffical/sdk-spec": "^0.5.0",
+        "@traffical/sdk-spec": "^0.7.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -104,7 +104,7 @@
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
         "@openfeature/web-sdk": "^1.9.0",
-        "@traffical/sdk-spec": "^0.5.0",
+        "@traffical/sdk-spec": "^0.7.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -422,7 +422,7 @@
 
     "@traffical/react-native": ["@traffical/react-native@workspace:packages/react-native"],
 
-    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.5.0", "", {}, "sha512-lwFkuqXhXkOcn1SOWDArZJEJA+CfESlYDb37KZdvSpyfkggxpRYbBnBqRpSq5m6QpSZBb2uHGV7JyqqLjSH7tg=="],
+    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.7.0", "", {}, "sha512-E+q5TizECFV+6hYBNscudfRbsMZGqe8J8YVxtjtLnXtuxrejUHc7m53kNpGQekBd0mOKDApo8SjkbYXXjkK42w=="],
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 

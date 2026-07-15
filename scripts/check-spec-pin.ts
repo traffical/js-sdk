@@ -3,9 +3,8 @@
  *
  * Fails CI when a package's pinned `@traffical/sdk-spec` dependency is BEHIND
  * the latest published spec version — i.e. a newer spec has shipped but this
- * repo still pins an older one. This is the guardrail that forces the
- * published-pin bump after the spec is released (see the TODO(release) markers
- * in the conformance tests).
+ * repo still pins an older one. This is the guardrail that keeps a
+ * published-pin bump from being missed after a spec release.
  *
  * "Latest" is the PUBLISHED version from `npm view @traffical/sdk-spec version`.
  * The unpublished sibling checkout is deliberately NOT used as "latest" — it is

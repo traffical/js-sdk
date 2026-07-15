@@ -1,12 +1,9 @@
 /**
  * Portable loader for @traffical/sdk-spec conformance fixtures.
  *
- * The 0.7.0 drift-remediation fixtures (empty/numeric unit keys, exposure
- * shape, omitted conditions, contextual boundary/guards, unicode, …) are
- * consumed here BEFORE `@traffical/sdk-spec@0.7.0` is published. To keep local
- * CI green against the in-flight spec branch without pinning an unpublished npm
- * version, `loadSpecFixture()` resolves each fixture from the first available
- * source, in order:
+ * `@traffical/sdk-spec@0.7.0` is published and pinned in this package's
+ * devDependencies, so it is the authoritative source. `loadSpecFixture()`
+ * resolves each fixture from the first available source, in order:
  *
  *   1. The installed `@traffical/sdk-spec` package — but ONLY when it is already
  *      at >= 0.7.0 (so a stale 0.5.0 pin never shadows a changed fixture).
@@ -15,10 +12,9 @@
  *   3. The installed package's fixtures dir as a last resort (older fixtures
  *      that did not change in 0.7.0).
  *
- * TODO(release): once @traffical/sdk-spec 0.7.0 is published and pinned in the
- * package.json devDependencies, candidate (1) always wins and the sibling-repo
- * fallback (2) can be deleted — switch the conformance tests back to plain
- * `import { ... } from "@traffical/sdk-spec"`.
+ * Candidate (1) is authoritative; the sibling-checkout fallback (2) is retained
+ * only as a convenience for local development against an unreleased future spec
+ * branch and is never used once the pinned package is installed.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

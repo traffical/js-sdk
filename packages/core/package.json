@@ -28,7 +28,7 @@
     "ulid": "^2.3.0"
   },
   "devDependencies": {
-    "@traffical/sdk-spec": "^0.5.0",
+    "@traffical/sdk-spec": "^0.7.0",
     "@types/bun": "latest",
     "ajv": "^8.17.1",
     "typescript": "^5.3.0"

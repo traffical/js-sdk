@@ -147,13 +147,44 @@ export interface TrafficalClientOptions {
    * On timeout the request is aborted and treated exactly like a network
    * failure: config fetches fall back to the cached/local config, and event
    * batches are persisted for retry.
+   *
+   * @deprecated Use the per-path options `configTimeoutMs`, `eventsTimeoutMs`,
+   * and `resolveTimeoutMs` instead. `requestTimeoutMs` is still honored as the
+   * legacy fallback for all three when the specific option is not provided.
    */
   requestTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for the config-bundle fetch (default: 10000).
+   * Falls back to `requestTimeoutMs` when not set.
+   */
+  configTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for event-delivery POSTs (default: 10000).
+   * Falls back to `requestTimeoutMs` when not set.
+   */
+  eventsTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for server-resolve requests (POST /v1/resolve,
+   * default: 5000). Falls back to `requestTimeoutMs` when not set.
+   */
+  resolveTimeoutMs?: number;
   /** Error boundary options */
   errorBoundary?: ErrorBoundaryOptions;
   /** Event batching options */
+  /**
+   * Events per delivery batch (default: 10).
+   * @deprecated Use the canonical `batchSize` instead. `eventBatchSize` still works.
+   */
   eventBatchSize?: number;
+  /**
+   * Event flush cadence in milliseconds (default: 30000).
+   * @deprecated Use the canonical `flushIntervalMs` instead. `eventFlushIntervalMs` still works.
+   */
   eventFlushIntervalMs?: number;
+  /** Events per delivery batch (default: 10). Canonical alias of `eventBatchSize`. */
+  batchSize?: number;
+  /** Event flush cadence in milliseconds (default: 30000). Canonical alias of `eventFlushIntervalMs`. */
+  flushIntervalMs?: number;
   /**
    * Maximum number of events buffered in memory before the oldest is dropped
    * (default: 1000). Bounds memory so the queue never grows without limit.
@@ -329,7 +360,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       attributionMode: options.attributionMode ?? "cumulative",
       evaluationMode,
     };
-    this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    // Config-fetch timeout: canonical configTimeoutMs wins, else legacy requestTimeoutMs.
+    this._requestTimeoutMs =
+      options.configTimeoutMs ?? options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     // Create DecisionClient when needed (server mode, or bundle mode may use for edge policies)
     const decisionClientConfig: DecisionClientConfig = {
@@ -338,6 +371,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       projectId: this._options.projectId,
       env: this._options.env,
       apiKey: this._options.apiKey,
+      // Server-resolve timeout: canonical resolveTimeoutMs wins, else legacy
+      // requestTimeoutMs; undefined lets DecisionClient apply its own 5s default.
+      defaultTimeoutMs: options.resolveTimeoutMs ?? options.requestTimeoutMs,
     };
     this._decisionClient = new DecisionClient(decisionClientConfig);
 
@@ -371,10 +407,12 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       apiKey: options.apiKey,
       storage: this._storage,
       lifecycleProvider: this._lifecycleProvider,
-      batchSize: options.eventBatchSize,
-      flushIntervalMs: options.eventFlushIntervalMs,
+      // Canonical batchSize/flushIntervalMs win over legacy event* names.
+      batchSize: options.batchSize ?? options.eventBatchSize,
+      flushIntervalMs: options.flushIntervalMs ?? options.eventFlushIntervalMs,
       maxQueueSize: options.eventMaxQueueSize,
-      requestTimeoutMs: options.requestTimeoutMs,
+      // Event-delivery timeout: canonical eventsTimeoutMs wins, else legacy requestTimeoutMs.
+      requestTimeoutMs: options.eventsTimeoutMs ?? options.requestTimeoutMs,
       onError: (error) => {
         console.warn("[Traffical] Event logging error:", error.message);
       },

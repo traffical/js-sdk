@@ -112,8 +112,14 @@ createTrafficalClient({
   baseUrl?: string,                // Default: https://sdk.traffical.io
   refreshIntervalMs?: number,      // Config refresh interval (default: 60000)
   localConfig?: ConfigBundle,      // Offline fallback config
-  eventBatchSize?: number,         // Events per batch (default: 10)
-  eventFlushIntervalMs?: number,   // Flush interval (default: 30000)
+  batchSize?: number,              // Events per batch (default: 10)
+                                   //   (legacy alias: eventBatchSize)
+  flushIntervalMs?: number,        // Flush interval (default: 30000)
+                                   //   (legacy alias: eventFlushIntervalMs)
+  configTimeoutMs?: number,        // Config-fetch timeout (default: 10000)
+  eventsTimeoutMs?: number,        // Event-delivery timeout (default: 10000)
+  resolveTimeoutMs?: number,       // Server-resolve timeout (default: 5000)
+                                   //   (legacy fallback for all three: requestTimeoutMs)
   exposureSessionTtlMs?: number,   // Dedup session TTL (default: 1800000)
   plugins?: TrafficalPlugin[],     // Plugins to register
 });

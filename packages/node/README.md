@@ -44,12 +44,22 @@ await client.track('purchase', {
 ```typescript
 const client = new TrafficalClient({
   // Required
+  orgId: 'org_...',
+  projectId: 'proj_...',
+  env: 'production',
   apiKey: 'sk_...',
-  
+
   // Optional
-  apiBase: 'https://api.traffical.io', // Custom API endpoint
-  cacheTtl: 60_000, // Config cache TTL in ms (default: 60s)
-  timeout: 5_000, // Request timeout in ms (default: 5s)
+  baseUrl: 'https://sdk.traffical.io', // Custom edge endpoint
+  refreshIntervalMs: 60_000,   // Config refresh interval (default: 60000)
+  batchSize: 10,               // Events per batch (default: 10)
+                               //   (legacy alias: eventBatchSize)
+  flushIntervalMs: 30_000,     // Flush interval (default: 30000)
+                               //   (legacy alias: eventFlushIntervalMs)
+  configTimeoutMs: 10_000,     // Config-fetch timeout (default: 10000)
+  eventsTimeoutMs: 10_000,     // Event-delivery timeout (default: 10000)
+  resolveTimeoutMs: 5_000,     // Server-resolve timeout (default: 5000)
+                               //   (legacy fallback for all three: requestTimeoutMs)
 });
 ```
 
@@ -106,8 +116,8 @@ The Node SDK automatically batches events for efficiency:
 ```typescript
 const client = new TrafficalClient({
   apiKey: 'sk_...',
-  batchSize: 100,      // Events per batch (default: 100)
-  flushInterval: 5000, // Flush interval in ms (default: 5s)
+  batchSize: 10,          // Events per batch (default: 10)
+  flushIntervalMs: 30000, // Flush interval in ms (default: 30s)
 });
 
 // Events are queued and sent in batches

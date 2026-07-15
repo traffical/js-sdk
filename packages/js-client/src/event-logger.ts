@@ -18,6 +18,7 @@ const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000; // 30 seconds
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 const MAX_FAILED_EVENTS = 100;
+const DEFAULT_MAX_QUEUE_SIZE = 1_000; // bounded in-memory queue; overflow drops oldest
 
 export interface EventLoggerOptions {
   /** API endpoint for events */
@@ -32,6 +33,11 @@ export interface EventLoggerOptions {
   batchSize?: number;
   /** Auto-flush interval in ms (default: 30000) */
   flushIntervalMs?: number;
+  /**
+   * Maximum number of events buffered in memory before the oldest is dropped
+   * (default: 1000). Bounds memory so the queue never grows without limit.
+   */
+  maxQueueSize?: number;
   /**
    * Timeout in ms for the event batch POST (default: 10000).
    * On timeout the request is aborted and treated like a failed send:
@@ -51,6 +57,7 @@ export class EventLogger {
   private _batchSize: number;
   private _flushIntervalMs: number;
   private _requestTimeoutMs: number;
+  private _maxQueueSize: number;
   private _onError?: (error: Error) => void;
   private _onSchemaWarnings?: OnSchemaWarnings;
 
@@ -58,6 +65,10 @@ export class EventLogger {
   private _queue: TrackableEvent[] = [];
   private _flushTimer: ReturnType<typeof setTimeout> | null = null;
   private _isFlushing = false;
+  /** Permanently true after an HTTP 401 kill-switch fires. */
+  private _isDisabled = false;
+  /** Count of events dropped because the bounded queue overflowed. */
+  private _droppedCount = 0;
   private _visibilityCallback?: (state: VisibilityState) => void;
 
   constructor(options: EventLoggerOptions) {
@@ -67,6 +78,7 @@ export class EventLogger {
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
     this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this._maxQueueSize = options.maxQueueSize ?? DEFAULT_MAX_QUEUE_SIZE;
     this._onError = options.onError;
     this._onSchemaWarnings = options.onSchemaWarnings;
     this._lifecycleProvider = options.lifecycleProvider;
@@ -84,6 +96,15 @@ export class EventLogger {
    * Log an event (added to batch queue).
    */
   log(event: TrackableEvent): void {
+    // Delivery permanently disabled (401) — stop buffering entirely.
+    if (this._isDisabled) return;
+
+    // Bounded queue: drop the oldest event on overflow.
+    if (this._queue.length >= this._maxQueueSize) {
+      this._queue.shift();
+      this._droppedCount++;
+    }
+
     this._queue.push(event);
 
     // Auto-flush if batch is full
@@ -94,9 +115,17 @@ export class EventLogger {
 
   /**
    * Flush all queued events immediately.
+   *
+   * Delivery outcomes:
+   * - 2xx: delivered.
+   * - Network error / timeout / 429 / 5xx: transient — events persisted for
+   *   retry on the next session/visibility change.
+   * - HTTP 401: auth kill-switch — delivery is permanently disabled, the queue
+   *   and any persisted failed events are cleared.
+   * - Other 4xx: permanent rejection — the batch is dropped.
    */
   async flush(): Promise<void> {
-    if (this._isFlushing || this._queue.length === 0) {
+    if (this._isFlushing || this._isDisabled || this._queue.length === 0) {
       return;
     }
 
@@ -107,14 +136,50 @@ export class EventLogger {
     this._queue = [];
 
     try {
-      await this._sendEvents(events);
+      const status = await this._sendEvents(events);
+      if (status >= 200 && status < 300) {
+        return; // delivered
+      }
+      if (status === 401) {
+        this._disable(); // auth kill-switch
+        return;
+      }
+      if (status === 429 || status >= 500) {
+        // Transient — persist for retry.
+        this._persistFailedEvents(events);
+        this._onError?.(new Error(`HTTP ${status}: event delivery failed, will retry`));
+        return;
+      }
+      // Other 4xx — permanent rejection; drop the batch.
+      this._onError?.(new Error(`HTTP ${status}: batch rejected, dropping ${events.length} events`));
     } catch (error) {
-      // Persist failed events for retry
+      // Network error / abort (timeout) — transient, persist for retry.
       this._persistFailedEvents(events);
       this._onError?.(error instanceof Error ? error : new Error(String(error)));
     } finally {
       this._isFlushing = false;
     }
+  }
+
+  /** Permanently disable delivery after a 401 and clear all buffered events. */
+  private _disable(): void {
+    if (this._isDisabled) return;
+    this._isDisabled = true;
+    this._queue = [];
+    this._storage.remove(FAILED_EVENTS_KEY);
+    console.warn(
+      "[Traffical] API key rejected (HTTP 401); event delivery disabled for this client"
+    );
+  }
+
+  /** Number of events dropped because the bounded queue overflowed. */
+  get droppedCount(): number {
+    return this._droppedCount;
+  }
+
+  /** True once an HTTP 401 permanently disabled delivery. */
+  get isDisabled(): boolean {
+    return this._isDisabled;
   }
 
   /**
@@ -179,7 +244,12 @@ export class EventLogger {
     this._removeListeners();
   }
 
-  private async _sendEvents(events: TrackableEvent[]): Promise<void> {
+  /**
+   * Sends one batch and returns the HTTP status code. Throws only on a
+   * transport-level failure (network error / abort), which the caller treats
+   * as a transient error. HTTP status classification is done by the caller.
+   */
+  private async _sendEvents(events: TrackableEvent[]): Promise<number> {
     // Abort the request if the edge hangs so the flush settles and events
     // go down the persist-for-retry path (same as any network failure).
     const controller = new AbortController();
@@ -201,7 +271,7 @@ export class EventLogger {
     }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      return response.status;
     }
 
     if (this._onSchemaWarnings) {
@@ -214,6 +284,8 @@ export class EventLogger {
         // Response parsing is best-effort for dev-mode warnings
       }
     }
+
+    return response.status;
   }
 
   private _persistFailedEvents(events: TrackableEvent[]): void {

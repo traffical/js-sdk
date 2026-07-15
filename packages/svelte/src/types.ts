@@ -180,6 +180,14 @@ export interface TrafficalContextValue {
   initialParams?: Record<string, unknown>;
   /** Bumped when parameter overrides change (via DevTools / debug plugin) */
   readonly overrideVersion: number;
+  /** Bumped when the client's config changes (initial fetch / background refresh) */
+  readonly configVersion: number;
+  /**
+   * Subscribe to client config changes. Returns an unsubscribe function.
+   * Fires after the initial CSR fetch and every background refresh so hooks can
+   * recompute resolved params/decisions.
+   */
+  onConfigChange: (cb: () => void) => () => void;
 }
 
 // =============================================================================

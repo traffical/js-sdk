@@ -67,12 +67,19 @@ export function TrafficalRNProvider({
     const additionalContext = config.contextFn?.() ?? {};
     const deviceInfo = config.deviceInfoProvider?.getDeviceInfo();
 
+    // Project identity onto the bundle's REAL unit-key field so a custom
+    // `hashing.unitKey` buckets correctly (mirrors openfeature-core). In server
+    // mode the bundle isn't held locally, so getUnitKeyField() may be null —
+    // fall back to the common field names.
+    const unitKeyField = clientRef.current?.getUnitKeyField?.() ?? null;
+    const identity = unitKeyField
+      ? { [unitKeyField]: unitKey }
+      : { userId: unitKey, deviceId: unitKey, anonymousId: unitKey };
+
     return {
       ...additionalContext,
       ...(deviceInfo ?? {}),
-      userId: unitKey,
-      deviceId: unitKey,
-      anonymousId: unitKey,
+      ...identity,
     };
   }, [getUnitKey, config.contextFn, config.deviceInfoProvider]);
 
@@ -133,26 +140,29 @@ export function TrafficalRNProvider({
       clientRef.current?.destroy();
       clientRef.current = null;
     };
+    // Recreate the client only when the connection identity changes. Depend
+    // ONLY on primitive/scalar options; non-primitive options — `plugins`,
+    // `localConfig`, `assignmentLogger`/`eventLogger`, `deviceInfoProvider` —
+    // are usually fresh references each render for inline `config` and would
+    // otherwise cause a destroy+refetch storm. They are read once at
+    // construction. Memoize `config` (or remount with a new `key`) to change
+    // them at runtime. See the provider docs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     config.orgId,
     config.projectId,
     config.env,
     config.apiKey,
     config.baseUrl,
-    config.localConfig,
     config.refreshIntervalMs,
     config.trackDecisions,
     config.decisionDeduplicationTtlMs,
     config.exposureSessionTtlMs,
     config.eventBatchSize,
     config.eventFlushIntervalMs,
-    config.plugins,
-    config.assignmentLogger,
-    config.eventLogger,
     config.disableCloudEvents,
     config.deduplicateAssignmentLogger,
     config.evaluationMode,
-    config.deviceInfoProvider,
     config.cacheMaxAgeMs,
   ]);
 

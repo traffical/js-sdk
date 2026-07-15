@@ -17,9 +17,6 @@
  */
 
 import { describe, test, expect, beforeAll } from "bun:test";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
 import { OpenFeature } from "@openfeature/server-sdk";
 import type { Client } from "@openfeature/server-sdk";
@@ -35,16 +32,10 @@ import {
 import { EXPOSURE_EVENT_NAME } from "@traffical/openfeature-core";
 import { TrafficalServerProvider } from "./index.js";
 
-// -----------------------------------------------------------------------------
-// Fixture loading (relative path — sdk-spec is a sibling of js-sdk)
-// -----------------------------------------------------------------------------
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, "../../../../sdk-spec/test-vectors/fixtures");
-
-function loadFixture<T>(name: string): T {
-  return JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as T;
-}
+// Fixtures are resolved via a portable multi-root loader (installed
+// @traffical/sdk-spec >= 0.7.0, else the sibling sdk-spec checkout) instead of a
+// brittle hard-coded ../../../../sdk-spec sibling path — see spec-fixtures.ts.
+import { loadFixture } from "./spec-fixtures.js";
 
 interface ExpectedFile {
   bundle: string;

@@ -28,7 +28,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "svelte-package --input src",
+    "build": "svelte-package --input src && find dist -name '*.test.*' -delete",
     "dev": "svelte-package --input src --watch",
     "test": "bun test",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"

@@ -14,11 +14,15 @@ import {
   type ConfigBundle,
   type Context,
   type DecisionResult,
+  type LayerResolution,
   type ParameterValue,
   type ExposureEvent,
   type TrackEvent,
   type TrackAttribution,
   type DecisionEvent,
+  type DecideOptions,
+  type GetParamsOptions,
+  type TrackEventOptions,
   type BundlePolicy,
   type ServerResolveResponse,
   type ResolveOptions,
@@ -60,11 +64,62 @@ import { SDK_VERSION } from "./version.js";
 
 const SDK_NAME = "js-client";
 
+/**
+ * Normalizes evaluation-method arguments so both the canonical positional form
+ * `decide(context, defaults)` and the legacy object-bag form
+ * `decide({ context, defaults })` work. Positional is detected by the presence
+ * of the second (`defaults`) argument; the bag form is soft-deprecated.
+ */
+function normalizeEvalArgs<T extends Record<string, ParameterValue>>(
+  contextOrOptions: Context | { context: Context; defaults: T },
+  maybeDefaults?: T
+): { context: Context; defaults: T } {
+  if (maybeDefaults !== undefined) {
+    return { context: contextOrOptions as Context, defaults: maybeDefaults };
+  }
+  const bag = contextOrOptions as { context: Context; defaults: T };
+  return { context: bag.context, defaults: bag.defaults };
+}
+
 const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 const OFFLINE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
+const MALFORMED_BUNDLE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
 const DECISION_CACHE_MAX_SIZE = 100; // Max decisions to cache for attribution lookup
+/** +/-10% jitter on the background refresh interval to avoid thundering-herd sync. */
+const REFRESH_JITTER_RATIO = 0.1;
+
+/** Returns `intervalMs` perturbed by uniform +/-REFRESH_JITTER_RATIO jitter. */
+function jitteredInterval(intervalMs: number): number {
+  const delta = intervalMs * REFRESH_JITTER_RATIO;
+  return intervalMs + (Math.random() * 2 - 1) * delta;
+}
+
+/**
+ * Structural guard for a fetched config bundle. A 200 response can still carry a
+ * malformed body (truncated CDN write, partial deploy); serving it would corrupt
+ * every bucket assignment. Requires the hashing config the resolver depends on
+ * (`unitKey` non-empty, `bucketCount` an integer >= 1) plus the top-level
+ * parameters/layers arrays.
+ */
+function isValidConfigBundle(bundle: unknown): bundle is ConfigBundle {
+  if (!bundle || typeof bundle !== "object") return false;
+  const b = bundle as Partial<ConfigBundle>;
+  if (!Array.isArray(b.parameters)) return false;
+  if (!Array.isArray(b.layers)) return false;
+  const hashing = b.hashing as Partial<ConfigBundle["hashing"]> | undefined;
+  if (!hashing || typeof hashing !== "object") return false;
+  if (typeof hashing.unitKey !== "string" || hashing.unitKey.length === 0) return false;
+  if (
+    typeof hashing.bucketCount !== "number" ||
+    !Number.isInteger(hashing.bucketCount) ||
+    hashing.bucketCount < 1
+  ) {
+    return false;
+  }
+  return true;
+}
 
 // =============================================================================
 // Types
@@ -92,13 +147,49 @@ export interface TrafficalClientOptions {
    * On timeout the request is aborted and treated exactly like a network
    * failure: config fetches fall back to the cached/local config, and event
    * batches are persisted for retry.
+   *
+   * @deprecated Use the per-path options `configTimeoutMs`, `eventsTimeoutMs`,
+   * and `resolveTimeoutMs` instead. `requestTimeoutMs` is still honored as the
+   * legacy fallback for all three when the specific option is not provided.
    */
   requestTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for the config-bundle fetch (default: 10000).
+   * Falls back to `requestTimeoutMs` when not set.
+   */
+  configTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for event-delivery POSTs (default: 10000).
+   * Falls back to `requestTimeoutMs` when not set.
+   */
+  eventsTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for server-resolve requests (POST /v1/resolve,
+   * default: 5000). Falls back to `requestTimeoutMs` when not set.
+   */
+  resolveTimeoutMs?: number;
   /** Error boundary options */
   errorBoundary?: ErrorBoundaryOptions;
   /** Event batching options */
+  /**
+   * Events per delivery batch (default: 10).
+   * @deprecated Use the canonical `batchSize` instead. `eventBatchSize` still works.
+   */
   eventBatchSize?: number;
+  /**
+   * Event flush cadence in milliseconds (default: 30000).
+   * @deprecated Use the canonical `flushIntervalMs` instead. `eventFlushIntervalMs` still works.
+   */
   eventFlushIntervalMs?: number;
+  /** Events per delivery batch (default: 10). Canonical alias of `eventBatchSize`. */
+  batchSize?: number;
+  /** Event flush cadence in milliseconds (default: 30000). Canonical alias of `eventFlushIntervalMs`. */
+  flushIntervalMs?: number;
+  /**
+   * Maximum number of events buffered in memory before the oldest is dropped
+   * (default: 1000). Bounds memory so the queue never grows without limit.
+   */
+  eventMaxQueueSize?: number;
   /** Exposure deduplication session TTL */
   exposureSessionTtlMs?: number;
   /**
@@ -188,6 +279,7 @@ interface ClientState {
   etag: string | null;
   lastFetchTime: number;
   lastOfflineWarning: number;
+  lastMalformedWarning: number;
   refreshTimer: ReturnType<typeof setInterval> | null;
   isInitialized: boolean;
   /** Cached server resolve response (server mode only) */
@@ -214,6 +306,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     etag: null,
     lastFetchTime: 0,
     lastOfflineWarning: 0,
+    lastMalformedWarning: 0,
     refreshTimer: null,
     isInitialized: false,
     serverResponse: null,
@@ -246,6 +339,13 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private _identityListeners: Array<(unitKey: string) => void> = [];
   private _overrideListeners: Array<(overrides: Record<string, ParameterValue>) => void> = [];
   private _overrides: Record<string, ParameterValue> = {};
+  /** Serialized context of the last server-mode resolve (per-call throttle). */
+  private _lastResolveContextKey: string | null = null;
+  /** Resolves once the first config load attempt completes (fail-open). */
+  private _readyResolve!: () => void;
+  private readonly _readyPromise: Promise<void> = new Promise((resolve) => {
+    this._readyResolve = resolve;
+  });
 
   constructor(options: TrafficalClientOptions) {
     const evaluationMode = options.evaluationMode ?? "bundle";
@@ -260,7 +360,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       attributionMode: options.attributionMode ?? "cumulative",
       evaluationMode,
     };
-    this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    // Config-fetch timeout: canonical configTimeoutMs wins, else legacy requestTimeoutMs.
+    this._requestTimeoutMs =
+      options.configTimeoutMs ?? options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     // Create DecisionClient when needed (server mode, or bundle mode may use for edge policies)
     const decisionClientConfig: DecisionClientConfig = {
@@ -269,6 +371,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       projectId: this._options.projectId,
       env: this._options.env,
       apiKey: this._options.apiKey,
+      // Server-resolve timeout: canonical resolveTimeoutMs wins, else legacy
+      // requestTimeoutMs; undefined lets DecisionClient apply its own 5s default.
+      defaultTimeoutMs: options.resolveTimeoutMs ?? options.requestTimeoutMs,
     };
     this._decisionClient = new DecisionClient(decisionClientConfig);
 
@@ -302,9 +407,12 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       apiKey: options.apiKey,
       storage: this._storage,
       lifecycleProvider: this._lifecycleProvider,
-      batchSize: options.eventBatchSize,
-      flushIntervalMs: options.eventFlushIntervalMs,
-      requestTimeoutMs: options.requestTimeoutMs,
+      // Canonical batchSize/flushIntervalMs win over legacy event* names.
+      batchSize: options.batchSize ?? options.eventBatchSize,
+      flushIntervalMs: options.flushIntervalMs ?? options.eventFlushIntervalMs,
+      maxQueueSize: options.eventMaxQueueSize,
+      // Event-delivery timeout: canonical eventsTimeoutMs wins, else legacy requestTimeoutMs.
+      requestTimeoutMs: options.eventsTimeoutMs ?? options.requestTimeoutMs,
       onError: (error) => {
         console.warn("[Traffical] Event logging error:", error.message);
       },
@@ -394,6 +502,8 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       },
       undefined
     );
+    // Fail-open: resolve readiness even if the config load errored/degraded.
+    this._readyResolve();
   }
 
   /**
@@ -404,7 +514,53 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   }
 
   /**
+   * Resolves once the first usable config has loaded (or the SDK has failed
+   * open on an unavailable/malformed bundle). Never rejects.
+   */
+  async waitForReady(): Promise<void> {
+    return this._readyPromise;
+  }
+
+  /**
+   * Single teardown verb (spec 0.7.0 design contract). Awaits a final event
+   * flush before returning; on page unload it falls back to sendBeacon so the
+   * final batch still ships. Prefer this over destroy()/destroySync().
+   */
+  async close(): Promise<void> {
+    if (this._state.refreshTimer) {
+      clearInterval(this._state.refreshTimer);
+      this._state.refreshTimer = null;
+    }
+
+    // Await the final flush in the normal path; fall back to a beacon on unload
+    // (a normal async flush can't complete as the page tears down).
+    if (this._lifecycleProvider.isUnloading()) {
+      this._eventLogger.flushBeacon();
+    } else {
+      await this._eventLogger.flush().catch(() => {});
+    }
+    this._eventLogger.destroy();
+
+    this._plugins.runDestroy();
+    this._identityListeners = [];
+    this._overrideListeners = [];
+    this._overrides = {};
+
+    if (typeof window !== "undefined") {
+      const w = window as unknown as Record<string, unknown>;
+      const instances = w.__TRAFFICAL_INSTANCES__ as TrafficalClient[] | undefined;
+      if (instances) {
+        const idx = instances.indexOf(this);
+        if (idx !== -1) instances.splice(idx, 1);
+      }
+    }
+  }
+
+  /**
    * Stops background refresh and cleans up resources.
+   *
+   * @deprecated Use {@link close} instead — the canonical single teardown verb
+   * that awaits the final flush.
    */
   destroy(): void {
     if (this._state.refreshTimer) {
@@ -486,13 +642,21 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   /**
    * Resolves parameters with defaults as fallback.
    */
-  getParams<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): T {
+  getParams<T extends Record<string, ParameterValue>>(context: Context, defaults: T): T;
+  /** @deprecated Pass `(context, defaults)` positionally (spec 0.7.0 contract). */
+  getParams<T extends Record<string, ParameterValue>>(options: GetParamsOptions<T>): T;
+  getParams<T extends Record<string, ParameterValue>>(
+    contextOrOptions: Context | GetParamsOptions<T>,
+    maybeDefaults?: T
+  ): T {
+    const { context: rawContext, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
     return this._errorBoundary.capture(
       "getParams",
       () => {
         // Server mode: return from cached server response
         if (this._options.evaluationMode === "server" && this._state.serverResponse) {
-          const result = { ...options.defaults } as Record<string, ParameterValue>;
+          this._maybeResolveForContext(rawContext);
+          const result = { ...defaults } as Record<string, ParameterValue>;
           for (const [key, value] of Object.entries(this._state.serverResponse.assignments)) {
             if (key in result) {
               result[key] = value;
@@ -504,8 +668,8 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         }
 
         const bundle = this._getEffectiveBundle();
-        const context = this._enrichContext(options.context);
-        const params = resolveParameters<T>(bundle, context, options.defaults);
+        const context = this._enrichContext(rawContext);
+        const params = resolveParameters<T>(bundle, context, defaults);
 
         // Run plugin onResolve hooks (e.g., DOM binding plugin)
         this._plugins.runResolve(params);
@@ -515,28 +679,38 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
         return params;
       },
-      options.defaults
+      defaults
     );
   }
 
   /**
    * Makes a decision with full metadata for tracking.
    */
-  decide<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): DecisionResult {
+  decide<T extends Record<string, ParameterValue>>(context: Context, defaults: T): DecisionResult;
+  /** @deprecated Pass `(context, defaults)` positionally (spec 0.7.0 contract). */
+  decide<T extends Record<string, ParameterValue>>(options: DecideOptions<T>): DecisionResult;
+  decide<T extends Record<string, ParameterValue>>(
+    contextOrOptions: Context | DecideOptions<T>,
+    maybeDefaults?: T
+  ): DecisionResult {
+    const { context: rawContext, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
     return this._errorBoundary.capture(
       "decide",
       () => {
         // Server mode: return from cached server response
         if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+          this._maybeResolveForContext(rawContext);
           const resp = this._state.serverResponse;
-          const assignments = { ...options.defaults } as Record<string, ParameterValue>;
+          const assignments = { ...defaults } as Record<string, ParameterValue>;
           for (const [key, value] of Object.entries(resp.assignments)) {
             if (key in assignments) {
               assignments[key] = value;
             }
           }
           const decision: DecisionResult = {
-            decisionId: resp.decisionId,
+            // Fresh decisionId per call — never reuse the resolve response's
+            // decisionId across decisions (spec 0.7.0 S8).
+            decisionId: generateDecisionId(),
             assignments,
             // Snapshot the resolve stateVersion at decision time so events
             // built later stamp the version this decision was evaluated
@@ -554,12 +728,12 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         const bundle = this._getEffectiveBundle();
 
         // Run plugin onBeforeDecision hooks
-        let context = this._enrichContext(options.context);
+        let context = this._enrichContext(rawContext);
         context = this._plugins.runBeforeDecision(context);
 
         // Pass cached edge results (from bundle mode pre-fetch) if available
         const edgeOpts = this._state.cachedEdgeResults ?? undefined;
-        const decision = coreDecide<T>(bundle, context, options.defaults, edgeOpts);
+        const decision = coreDecide<T>(bundle, context, defaults, edgeOpts);
 
         // Cache decision for attribution lookup when track() is called
         this._cacheDecision(decision);
@@ -578,7 +752,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       },
       {
         decisionId: generateDecisionId(),
-        assignments: options.defaults,
+        assignments: defaults,
         metadata: {
           timestamp: new Date().toISOString(),
           unitKeyValue: "",
@@ -616,42 +790,50 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         const configVersion =
           decision.metadata.configVersion ?? this.getConfigVersion() ?? undefined;
 
-        // Check each layer for deduplication
+        // S4 canonical shape: ONE exposure event per trackExposure() carrying
+        // only newly-exposed, non-attributionOnly layers. Skip layers without
+        // a policy/allocation, skip attribution-only layers (parameters not
+        // requested by this decision), and dedup per (unit, policy, allocation)
+        // for the session (dedup on by default). Mirrors the Node SDK — no
+        // longer one event per layer with the full unfiltered layers array.
+        const exposedLayers: LayerResolution[] = [];
         for (const layer of decision.metadata.layers) {
           if (!layer.policyId || !layer.allocationName) continue;
-
-          // Skip attribution-only layers — the user wasn't exposed to
-          // parameters from this layer, so no exposure event should fire.
           if (layer.attributionOnly) continue;
-
-          // Deduplicate
-          const isNew = this._exposureDedup.checkAndMark(unitKey, layer.policyId, layer.allocationName);
-          if (!isNew) continue;
-
-          const event: ExposureEvent = {
-            type: "exposure",
-            id: generateExposureId(), // Unique exposure ID (not same as decision)
-            decisionId: decision.decisionId,
-            orgId: this._options.orgId,
-            projectId: this._options.projectId,
-            env: this._options.env,
+          const isNew = this._exposureDedup.checkAndMark(
             unitKey,
-            timestamp: new Date().toISOString(),
-            assignments: decision.assignments,
-            layers: decision.metadata.layers,
-            context: decision.metadata.filteredContext,
-            configVersion,
-            sdkName: SDK_NAME,
-            sdkVersion: SDK_VERSION,
-          };
-
-          // Run plugin onExposure hooks
-          if (!this._plugins.runExposure(event)) {
-            continue;
-          }
-
-          this._dispatchEvent(event);
+            layer.policyId,
+            layer.allocationName
+          );
+          if (!isNew) continue;
+          exposedLayers.push(layer);
         }
+
+        // Nothing new to expose (all attribution-only or already seen this
+        // session) — emit NO event (never an empty-layers event).
+        if (exposedLayers.length === 0) return;
+
+        const event: ExposureEvent = {
+          type: "exposure",
+          id: generateExposureId(), // Unique exposure ID (not same as decision)
+          decisionId: decision.decisionId,
+          orgId: this._options.orgId,
+          projectId: this._options.projectId,
+          env: this._options.env,
+          unitKey,
+          timestamp: new Date().toISOString(),
+          assignments: decision.assignments,
+          layers: exposedLayers,
+          context: decision.metadata.filteredContext,
+          configVersion,
+          sdkName: SDK_NAME,
+          sdkVersion: SDK_VERSION,
+        };
+
+        // Run plugin onExposure hooks
+        if (!this._plugins.runExposure(event)) return;
+
+        this._dispatchEvent(event);
       },
       undefined
     );
@@ -677,13 +859,19 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   track<E extends Extract<keyof TEvents, string>>(
     eventName: E,
     properties?: TEvents[E],
-    options?: { decisionId?: string; unitKey?: string }
+    options?: TrackEventOptions
   ): void {
     this._errorBoundary.capture(
       "track",
       () => {
         const unitKey = options?.unitKey ?? this._stableId.getId();
-        const value = typeof properties?.value === 'number' ? properties.value : undefined;
+        // Single numeric value: explicit options.value wins, else properties.value.
+        const value =
+          typeof options?.value === "number"
+            ? options.value
+            : typeof properties?.value === "number"
+              ? properties.value
+              : undefined;
 
         // Auto-populate attribution from cached decisions
         const attribution = this._buildAttribution(unitKey, options?.decisionId);
@@ -699,9 +887,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
           timestamp: new Date().toISOString(),
           event: eventName,
           value,
+          values: options?.values,
           properties,
           decisionId,
           attribution,
+          eventTimestamp: options?.eventTimestamp,
           sdkName: SDK_NAME,
           sdkVersion: SDK_VERSION,
         };
@@ -969,7 +1159,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   }
 
   private async _fetchConfig(): Promise<void> {
-    const url = `${this._options.baseUrl}/v1/config/${this._options.projectId}?env=${this._options.env}`;
+    // URL-encode path/query components so an env or projectId containing
+    // reserved characters (spaces, &, ?, /) can't corrupt the request URL.
+    const url = `${this._options.baseUrl}/v1/config/${encodeURIComponent(
+      this._options.projectId
+    )}?env=${encodeURIComponent(this._options.env)}`;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -1004,6 +1198,14 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       const bundle = (await response.json()) as ConfigBundle;
       const etag = response.headers.get("ETag");
 
+      // A 200 can still carry a malformed body. Discard it and keep the
+      // previous last-good bundle rather than corrupting bucket assignments or
+      // falling through to defaults when we already have a valid config.
+      if (!isValidConfigBundle(bundle)) {
+        this._logMalformedBundleWarning();
+        return;
+      }
+
       this._state.bundle = bundle;
       this._state.etag = etag;
       this._state.lastFetchTime = Date.now();
@@ -1032,20 +1234,49 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
     if (interval <= 0) return;
 
-    this._state.refreshTimer = setInterval(() => {
-      if (this._options.evaluationMode === "server") {
-        this._fetchServerResolve().catch(() => {});
-      } else {
-        this._fetchConfig().catch(() => {});
-      }
-    }, interval);
+    // Reschedule via setTimeout with fresh +/-10% jitter each tick (instead of a
+    // fixed setInterval) so fleets of clients don't converge on the same refresh
+    // instant and stampede the edge.
+    const scheduleNext = () => {
+      this._state.refreshTimer = setTimeout(() => {
+        // Schedule the next tick before firing so cadence stays independent of
+        // fetch latency (matching the previous fire-and-forget setInterval).
+        scheduleNext();
+        if (this._options.evaluationMode === "server") {
+          this._fetchServerResolve().catch(() => {});
+        } else {
+          this._fetchConfig().catch(() => {});
+        }
+      }, jitteredInterval(interval));
+    };
+    scheduleNext();
   }
 
-  private async _fetchServerResolve(): Promise<void> {
+  /**
+   * Server mode: threads the per-call context into a background /v1/resolve so
+   * the cached snapshot converges to the contexts actually being evaluated.
+   * Throttled by serialized context so repeated identical contexts don't hammer
+   * the edge. decide()/getParams() are synchronous and cannot await this; the
+   * current call degrades to the last-good snapshot.
+   */
+  private _maybeResolveForContext(context: Context): void {
+    const enriched = this._enrichContext(context);
+    let key: string;
+    try {
+      key = JSON.stringify(enriched);
+    } catch {
+      key = "";
+    }
+    if (key === this._lastResolveContextKey) return;
+    this._lastResolveContextKey = key;
+    void this._fetchServerResolve(enriched);
+  }
+
+  private async _fetchServerResolve(contextOverride?: Context): Promise<void> {
     if (!this._decisionClient) return;
 
     try {
-      const context = this._enrichContext({});
+      const context = contextOverride ?? this._enrichContext({});
       const response = await this._decisionClient.resolve({ context });
       if (response) {
         this._state.serverResponse = response;
@@ -1138,6 +1369,16 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         `[Traffical] Failed to fetch config: ${error instanceof Error ? error.message : String(error)}. Using ${this._state.bundle ? "cached" : "local"} config.`
       );
       this._state.lastOfflineWarning = now;
+    }
+  }
+
+  private _logMalformedBundleWarning(): void {
+    const now = Date.now();
+    if (now - this._state.lastMalformedWarning > MALFORMED_BUNDLE_WARNING_INTERVAL_MS) {
+      console.warn(
+        `[Traffical] Discarded malformed config bundle (invalid hashing/shape). Using ${this._state.bundle ? "cached" : "local"} config.`
+      );
+      this._state.lastMalformedWarning = now;
     }
   }
 

@@ -11,6 +11,17 @@ import {
 import { createRNLifecycleProvider } from "./lifecycle.js";
 import type { DeviceInfoProvider } from "./device-info.js";
 
+/**
+ * Minimal view of the base client's private `_state` we need for offline
+ * server-response caching. The base `TrafficalClient` seeds `_state.bundle`
+ * from `localConfig` but has no equivalent seed for server-mode responses, so
+ * the RN subclass injects a persisted response directly. This is confined to
+ * the RN package and is the narrowest possible reach into the base state.
+ */
+interface ClientStateView {
+  serverResponse: ServerResolveResponse | null;
+}
+
 export interface TrafficalRNClientOptions extends TrafficalClientOptions {
   deviceInfoProvider?: DeviceInfoProvider;
   /** Cache max age in ms for persisted server responses (default: 86400000 = 24 hours) */
@@ -56,15 +67,21 @@ export class TrafficalRNClient<TEvents extends TrackEventMap = TrackEventMap> ex
   /**
    * RN-specific initialization:
    * 1. Wait for AsyncStorage preload
-   * 2. Load cached server response if available
-   * 3. Call parent initialize (fetches from server)
-   * 4. Persist response to cache
+   * 2. Load cached server response and INJECT it into client state so an
+   *    offline cold start serves the last-known assignments immediately
+   * 3. Call parent initialize (fetches from server; on failure the injected
+   *    cached response survives — the base resolve fetch only overwrites
+   *    serverResponse on success)
+   * 4. Persist the (possibly refreshed) response to cache
    */
   async initialize(): Promise<void> {
     await this._rnStorage.waitUntilReady();
 
     const cached = this._loadCachedResponse();
     if (cached) {
+      // Seed the base client's state BEFORE super.initialize() so getParams /
+      // decide resolve against the cached response even if the network is down.
+      this._baseState().serverResponse = cached;
       this._lastResolveTimestamp = this._loadCachedTimestamp();
       if (cached.suggestedRefreshMs) {
         this._suggestedRefreshMs = cached.suggestedRefreshMs;
@@ -77,11 +94,30 @@ export class TrafficalRNClient<TEvents extends TrackEventMap = TrackEventMap> ex
   }
 
   override destroy(): void {
+    this._teardownRNLifecycle();
+    super.destroy();
+  }
+
+  override async close(): Promise<void> {
+    this._teardownRNLifecycle();
+    await super.close();
+  }
+
+  /** Remove our foreground listener AND the native AppState subscription. */
+  private _teardownRNLifecycle(): void {
     if (this._visibilityCallback) {
       this._rnLifecycle.removeVisibilityListener(this._visibilityCallback);
       this._visibilityCallback = null;
     }
-    super.destroy();
+    const disposable = this._rnLifecycle as LifecycleProvider & {
+      dispose?: () => void;
+    };
+    disposable.dispose?.();
+  }
+
+  /** Narrow, RN-only reach into the base client's private state (see above). */
+  private _baseState(): ClientStateView {
+    return (this as unknown as { _state: ClientStateView })._state;
   }
 
   override async refreshConfig(): Promise<void> {
@@ -111,11 +147,15 @@ export class TrafficalRNClient<TEvents extends TrackEventMap = TrackEventMap> ex
   }
 
   private _persistCurrentResponse(): void {
-    const version = this.getConfigVersion();
-    if (!version) return;
+    const response = this._baseState().serverResponse;
+    if (!response) return;
 
     const now = Date.now();
     this._lastResolveTimestamp = now;
+    // Persist the FULL resolve response (not just a timestamp) so the next cold
+    // start can serve it offline. Keyed by CACHED_RESPONSE_KEY, which
+    // _loadCachedResponse reads back.
+    this._rnStorage.set(CACHED_RESPONSE_KEY, response, this._cacheMaxAgeMs);
     this._rnStorage.set(CACHED_RESPONSE_TIMESTAMP_KEY, now, this._cacheMaxAgeMs);
   }
 }

@@ -163,9 +163,9 @@ export interface BundleContextualModel {
   coefficients: Record<string, BundleAllocationCoefficients>;
   /**
    * Timestamp of the training run that produced these coefficients
-   * (the control plane's trainingSummary.generatedAt). When absent,
-   * the `modelVersion` alias and then the policy's `stateVersion` are
-   * used as the model version for exposure logging.
+   * (the control plane's trainingSummary.generatedAt). When absent, the
+   * `modelVersion` alias is used as the model version for exposure logging
+   * (spec 0.7.0 S7 — no further fallback to the policy's `stateVersion`).
    */
   generatedAt?: Timestamp;
   /**
@@ -415,8 +415,9 @@ export interface LayerResolution {
   /**
    * For linear_contextual policies: version timestamp of the trained model
    * whose coefficients produced this selection (the bundle model's
-   * `generatedAt`, falling back to its `modelVersion` alias, then to the
-   * policy's `stateVersion`). Omitted for all other policies.
+   * `generatedAt`, falling back only to its `modelVersion` alias — per spec
+   * 0.7.0 S7 there is NO fallback to the policy's `stateVersion`). Omitted for
+   * all other policies, and when both model timestamps are absent.
    */
   modelVersion?: string;
   /**
@@ -741,6 +742,25 @@ export interface DecideOptions<T extends Record<string, ParameterValue> = Record
   context: Context;
   /** Default values for parameters - used as fallback when bundle unavailable */
   defaults: T;
+}
+
+/**
+ * Canonical options bag for the `track(event, properties?, options?)` method
+ * (spec 0.7.0 design contract). Every field is optional; using a single bag
+ * (rather than positional trailing args) is what lets `values` and
+ * `eventTimestamp` exist consistently across all SDKs.
+ */
+export interface TrackEventOptions {
+  /** Link this event to a prior decide() for attribution. */
+  decisionId?: Id;
+  /** Override the unit for this event. */
+  unitKey?: string;
+  /** Single numeric value (e.g. revenue). Falls back to `properties.value`. */
+  value?: number;
+  /** Multiple named numeric values for multi-objective optimization. */
+  values?: Record<string, number>;
+  /** Explicit event time (ISO 8601); defaults to "now" when omitted. */
+  eventTimestamp?: Timestamp;
 }
 
 /**

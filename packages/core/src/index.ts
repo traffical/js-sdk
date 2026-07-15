@@ -62,6 +62,7 @@ export type {
   GetParamsOptions,
   DecideOptions,
   TrackOptions,
+  TrackEventOptions,
   // Typed event tracking
   TrackEventMap,
   TypedTrackFn,

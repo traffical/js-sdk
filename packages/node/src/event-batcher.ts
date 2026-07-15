@@ -18,6 +18,9 @@ import type { TrackableEvent, OnSchemaWarnings, EventBatchResponse } from "@traf
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000; // 30 seconds
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
+const DEFAULT_MAX_QUEUE_SIZE = 1_000; // bounded queue; overflow drops oldest
+const DEFAULT_MAX_RETRIES = 3; // attempts after the first = 3
+const DEFAULT_RETRY_BACKOFF_MS = 250; // exponential: base * 2^(attempt-1)
 
 /**
  * Options for EventBatcher.
@@ -37,6 +40,20 @@ export interface EventBatcherOptions {
    * events are re-queued for retry.
    */
   requestTimeoutMs?: number;
+  /**
+   * Maximum number of events buffered in memory (default: 1000). When the
+   * queue is full, the OLDEST event is dropped (a counter is bumped) — the
+   * queue never grows without bound. Aligns with the Python SDK's model.
+   */
+  maxQueueSize?: number;
+  /**
+   * Max retry attempts (after the first) for a transient delivery failure
+   * (network error, timeout, 429, 5xx) before the batch is re-queued for a
+   * later flush (default: 3).
+   */
+  maxRetries?: number;
+  /** Base for exponential retry backoff in ms: base * 2^(attempt-1) (default: 250). */
+  retryBackoffMs?: number;
   /** Callback on flush error */
   onError?: (error: Error) => void;
   /** Enable debug logging */
@@ -45,12 +62,18 @@ export interface EventBatcherOptions {
   onSchemaWarnings?: OnSchemaWarnings;
 }
 
+/** Outcome of attempting to deliver one batch. */
+type DeliveryOutcome = "delivered" | "dropped" | "disabled" | "retry-later";
+
 export class EventBatcher {
   private readonly _endpoint: string;
   private readonly _apiKey: string;
   private readonly _batchSize: number;
   private readonly _flushIntervalMs: number;
   private readonly _requestTimeoutMs: number;
+  private readonly _maxQueueSize: number;
+  private readonly _maxRetries: number;
+  private readonly _retryBackoffMs: number;
   private readonly _onError?: (error: Error) => void;
   private readonly _onSchemaWarnings?: OnSchemaWarnings;
   private readonly _debug: boolean;
@@ -59,6 +82,10 @@ export class EventBatcher {
   private _flushTimer: ReturnType<typeof setInterval> | null = null;
   private _isFlushing = false;
   private _isDestroyed = false;
+  /** Permanently true after an HTTP 401 kill-switch fires. */
+  private _isDisabled = false;
+  /** Count of events dropped because the bounded queue overflowed. */
+  private _droppedCount = 0;
 
   constructor(options: EventBatcherOptions) {
     this._endpoint = options.endpoint;
@@ -66,6 +93,9 @@ export class EventBatcher {
     this._batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
     this._flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
     this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this._maxQueueSize = options.maxQueueSize ?? DEFAULT_MAX_QUEUE_SIZE;
+    this._maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this._retryBackoffMs = options.retryBackoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
     this._onError = options.onError;
     this._onSchemaWarnings = options.onSchemaWarnings;
     this._debug = options.debug ?? false;
@@ -75,12 +105,25 @@ export class EventBatcher {
   }
 
   /**
-   * Log an event (added to batch queue).
+   * Log an event (added to the bounded batch queue). When the queue is full
+   * the OLDEST event is dropped (drop-oldest) so memory can't grow without
+   * bound. After a 401 kill-switch, events are silently discarded.
    */
   log(event: TrackableEvent): void {
     if (this._isDestroyed) {
       this._log("Attempted to log event after destroy, ignoring");
       return;
+    }
+    if (this._isDisabled) {
+      // Delivery permanently disabled (401) — stop buffering entirely.
+      return;
+    }
+
+    // Bounded queue: drop the oldest event on overflow.
+    if (this._queue.length >= this._maxQueueSize) {
+      this._queue.shift();
+      this._droppedCount++;
+      this._log(`Queue full, dropped oldest event (dropped total: ${this._droppedCount})`);
     }
 
     this._queue.push(event);
@@ -96,30 +139,117 @@ export class EventBatcher {
   }
 
   /**
-   * Flush all queued events immediately.
+   * Flush queued events immediately.
+   *
+   * Drains the queue in batch-sized chunks. Each batch is delivered with
+   * exponential-backoff retry on transient failures (network/timeout/429/5xx).
+   * A batch that still fails after `maxRetries` is re-queued at the FRONT
+   * (bounded) and draining stops until the next flush. A non-retryable 4xx
+   * drops the batch. An HTTP 401 permanently disables delivery and clears the
+   * queue (auth kill-switch).
    */
   async flush(): Promise<void> {
-    if (this._isFlushing || this._queue.length === 0) {
+    if (this._isFlushing || this._isDisabled || this._queue.length === 0) {
       return;
     }
 
     this._isFlushing = true;
-
-    // Take current queue
-    const events = [...this._queue];
-    this._queue = [];
-
     try {
-      await this._sendEvents(events);
-      this._log(`Flushed ${events.length} events successfully`);
-    } catch (error) {
-      // Put events back in queue for retry (at the front)
-      this._queue.unshift(...events);
-      this._log(`Flush failed, ${events.length} events re-queued`);
-      this._onError?.(error instanceof Error ? error : new Error(String(error)));
+      while (this._queue.length > 0 && !this._isDisabled) {
+        // Drain a batch OUT of the queue (so concurrent log()s can't alias it).
+        const batch = this._queue.splice(0, this._batchSize);
+        const outcome = await this._deliverWithRetry(batch);
+
+        if (outcome === "delivered") {
+          this._log(`Flushed ${batch.length} events successfully`);
+          continue;
+        }
+        if (outcome === "dropped") {
+          continue; // non-retryable rejection; batch discarded
+        }
+        if (outcome === "disabled") {
+          this._queue = []; // 401 kill-switch
+          break;
+        }
+        // retry-later: put the batch back at the front (bounded) and stop.
+        this._requeueFront(batch);
+        this._log(`Flush failed, ${batch.length} events re-queued`);
+        break;
+      }
     } finally {
       this._isFlushing = false;
     }
+  }
+
+  /**
+   * Delivers one batch with bounded exponential-backoff retry.
+   * onError fires exactly once per batch that ends in a retry-later.
+   */
+  private async _deliverWithRetry(batch: TrackableEvent[]): Promise<DeliveryOutcome> {
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= this._maxRetries; attempt++) {
+      if (attempt > 0) {
+        // Stop retrying inline once we're shutting down; the batch is
+        // re-queued and best-effort flushed by the caller.
+        if (this._isDestroyed) break;
+        await this._sleep(this._retryBackoffMs * 2 ** (attempt - 1));
+      }
+
+      let status: number;
+      try {
+        status = await this._sendEvents(batch);
+      } catch (error) {
+        // Network error / abort (timeout) — transient, retry.
+        lastError = error instanceof Error ? error : new Error(String(error));
+        continue;
+      }
+
+      if (status >= 200 && status < 300) return "delivered";
+      if (status === 401) {
+        this._disable();
+        return "disabled";
+      }
+      if (status === 429 || status >= 500) {
+        lastError = new Error(`HTTP ${status}`);
+        continue; // transient, retry
+      }
+      // Other 4xx — permanent rejection, drop the batch.
+      this._onError?.(
+        new Error(`HTTP ${status}: batch rejected, dropping ${batch.length} events`)
+      );
+      return "dropped";
+    }
+
+    if (lastError) this._onError?.(lastError);
+    return "retry-later";
+  }
+
+  /** Re-queues a failed batch at the front, dropping oldest on overflow. */
+  private _requeueFront(batch: TrackableEvent[]): void {
+    this._queue.unshift(...batch);
+    while (this._queue.length > this._maxQueueSize) {
+      this._queue.shift();
+      this._droppedCount++;
+    }
+  }
+
+  private _disable(): void {
+    if (this._isDisabled) return;
+    this._isDisabled = true;
+    this._queue = [];
+    console.warn(
+      "[Traffical] API key rejected (HTTP 401); event delivery disabled for this client"
+    );
+  }
+
+  private _sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const t = setTimeout(resolve, ms);
+      if (typeof (t as { unref?: () => void }).unref === "function") {
+        (t as { unref: () => void }).unref();
+      }
+    });
   }
 
   /**
@@ -127,6 +257,16 @@ export class EventBatcher {
    */
   get queueSize(): number {
     return this._queue.length;
+  }
+
+  /** Number of events dropped because the bounded queue overflowed. */
+  get droppedCount(): number {
+    return this._droppedCount;
+  }
+
+  /** True once an HTTP 401 permanently disabled delivery. */
+  get isDisabled(): boolean {
+    return this._isDisabled;
   }
 
   /**
@@ -179,7 +319,13 @@ export class EventBatcher {
     }
   }
 
-  private async _sendEvents(events: TrackableEvent[]): Promise<void> {
+  /**
+   * Sends one batch and returns the HTTP status code. Throws only on a
+   * transport-level failure (network error / abort), which the caller treats
+   * as a transient, retryable error. HTTP status classification (2xx / 401 /
+   * 4xx / 5xx) is done by the caller.
+   */
+  private async _sendEvents(events: TrackableEvent[]): Promise<number> {
     // Abort the request if the edge hangs so the flush settles and events
     // go down the re-queue-for-retry path (same as any network failure).
     const controller = new AbortController();
@@ -201,7 +347,7 @@ export class EventBatcher {
     }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      return response.status;
     }
 
     if (this._onSchemaWarnings) {
@@ -214,6 +360,8 @@ export class EventBatcher {
         // Response parsing is best-effort for dev-mode warnings
       }
     }
+
+    return response.status;
   }
 
   private _startFlushTimer(): void {

@@ -5,7 +5,7 @@
  * client. Combines the resolve path (M1) with the exposure / reward / lifecycle
  * path (M2).
  *
- * Design: /Users/marcel/Code/traffical/ng/docs/design/openfeature-provider-design.md
+ * Design: see the OpenFeature provider design in the Traffical SDK spec.
  *   §2 architecture · §3 core mapping · §4 resolution · §5 exposure ·
  *   §6 reward · §7 lifecycle/events · §8 server provider · §10 SDK enhancements ·
  *   §11 testing · §13 measurement fidelity.
@@ -61,6 +61,12 @@ export interface TrafficalServerClient extends TrafficalClientLike {
   initialize?(): Promise<void>;
   flushEvents?(): Promise<void>;
   destroy?(): Promise<void> | void;
+  /**
+   * Canonical single teardown verb (spec 0.7.0 design contract). Awaits a final
+   * event flush before returning. The `@traffical/node` client now exposes this
+   * alongside the deprecated `destroy()`; `onClose()` prefers it (see below).
+   */
+  close?(): Promise<void> | void;
   /**
    * Optional accessor some clients expose for the configured evaluation mode.
    * v1 supports `"bundle"` only (design §7.4); a `"server"`-mode client is
@@ -199,7 +205,14 @@ export class TrafficalServerProvider implements Provider, Tracking {
     if (this.closed) return;
     this.closed = true;
     this.initialized = false;
-    // Flush-then-dispose (design §7.2). Both are optional/feature-detected.
+    // Flush-then-dispose (design §7.2). Prefer the canonical `close()` (which
+    // itself awaits a final flush per the 0.7.0 contract); fall back to the
+    // deprecated `flushEvents()` + `destroy()` for leaner/older clients. All
+    // optional and feature-detected.
+    if (typeof this.client.close === "function") {
+      await this.client.close();
+      return;
+    }
     await this.client.flushEvents?.();
     await this.client.destroy?.();
   }

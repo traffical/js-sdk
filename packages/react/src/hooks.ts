@@ -22,20 +22,31 @@ import { useTrafficalContext } from "./context.js";
 // =============================================================================
 
 /**
- * Creates a stable string key from an object for use in dependency arrays.
+ * Creates a stable string key from a value for use in dependency arrays.
  * This prevents infinite re-renders when users pass inline objects to hooks.
  *
- * Uses JSON.stringify with sorted keys to ensure consistent ordering.
+ * Recursively sorts object keys at EVERY level so nested context/defaults
+ * objects produce a stable, order-independent key. (The previous implementation
+ * used `JSON.stringify(obj, Object.keys(obj).sort())`, whose array replacer only
+ * allowlists top-level keys and never reorders nested objects — so changes to a
+ * nested value were missed and top-level key reordering churned the ref.)
  */
-function createStableKey(obj: unknown): string {
-  if (obj === null || obj === undefined) {
-    return String(obj);
+export function createStableKey(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    // Primitives, null, undefined, functions. JSON.stringify(undefined) and
+    // JSON.stringify(fn) are `undefined`, so fall back to a stable token.
+    return JSON.stringify(value) ?? String(value);
   }
-  if (typeof obj !== "object") {
-    return String(obj);
+  if (Array.isArray(value)) {
+    return "[" + value.map(createStableKey).join(",") + "]";
   }
-  // Sort keys for consistent ordering
-  return JSON.stringify(obj, Object.keys(obj as object).sort());
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return (
+    "{" +
+    keys.map((k) => JSON.stringify(k) + ":" + createStableKey(obj[k])).join(",") +
+    "}"
+  );
 }
 
 /**

@@ -20,6 +20,9 @@ import {
   type ParameterValue,
   type TrafficalClientOptions as CoreClientOptions,
   type TrackOptions,
+  type TrackEventOptions,
+  type DecideOptions,
+  type GetParamsOptions,
   type ExposureEvent,
   type TrackEvent,
   type TrackAttribution,
@@ -39,6 +42,7 @@ import {
   generateExposureId,
   generateTrackEventId,
   generateAssignmentId,
+  generateDecisionId,
 } from "@traffical/core";
 
 import { DecisionClient } from "@traffical/core-io";
@@ -52,15 +56,66 @@ import { SDK_VERSION } from "./version.js";
 
 const SDK_NAME = "node";
 
+/**
+ * Normalizes evaluation-method arguments so both the canonical positional form
+ * `decide(context, defaults)` and the legacy object-bag form
+ * `decide({ context, defaults })` work. Positional is detected by the presence
+ * of the second (`defaults`) argument; the bag form is soft-deprecated.
+ */
+function normalizeEvalArgs<T extends Record<string, ParameterValue>>(
+  contextOrOptions: Context | { context: Context; defaults: T },
+  maybeDefaults?: T
+): { context: Context; defaults: T } {
+  if (maybeDefaults !== undefined) {
+    return { context: contextOrOptions as Context, defaults: maybeDefaults };
+  }
+  const bag = contextOrOptions as { context: Context; defaults: T };
+  return { context: bag.context, defaults: bag.defaults };
+}
+
 const DEFAULT_BASE_URL = "https://sdk.traffical.io";
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000; // 1 minute
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000; // 10 seconds
 const OFFLINE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
+const MALFORMED_BUNDLE_WARNING_INTERVAL_MS = 300_000; // 5 minutes
 const DECISION_CACHE_MAX_SIZE = 1000; // Max decisions to cache for attribution lookup
+/** +/-10% jitter on the background refresh interval to avoid thundering-herd sync. */
+const REFRESH_JITTER_RATIO = 0.1;
 const ASSIGNMENT_LOGGER_LRU_MAX = 10_000;
 const ASSIGNMENT_LOGGER_LRU_TTL_MS = 60 * 60 * 1000; // 1 hour
 const EXPOSURE_DEDUP_LRU_MAX = 10_000;
 const DEFAULT_EXPOSURE_SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (mirrors js-client)
+
+/** Returns `intervalMs` perturbed by uniform +/-REFRESH_JITTER_RATIO jitter. */
+function jitteredInterval(intervalMs: number): number {
+  const delta = intervalMs * REFRESH_JITTER_RATIO;
+  return intervalMs + (Math.random() * 2 - 1) * delta;
+}
+
+/**
+ * Structural guard for a fetched config bundle. A 200 response can still carry a
+ * malformed body (truncated CDN write, partial deploy); serving it would corrupt
+ * every bucket assignment. Requires the hashing config the resolver depends on
+ * (`unitKey` non-empty, `bucketCount` an integer >= 1) plus the top-level
+ * parameters/layers arrays.
+ */
+function isValidConfigBundle(bundle: unknown): bundle is ConfigBundle {
+  if (!bundle || typeof bundle !== "object") return false;
+  const b = bundle as Partial<ConfigBundle>;
+  if (!Array.isArray(b.parameters)) return false;
+  if (!Array.isArray(b.layers)) return false;
+  const hashing = b.hashing as Partial<ConfigBundle["hashing"]> | undefined;
+  if (!hashing || typeof hashing !== "object") return false;
+  if (typeof hashing.unitKey !== "string" || hashing.unitKey.length === 0) return false;
+  if (
+    typeof hashing.bucketCount !== "number" ||
+    !Number.isInteger(hashing.bucketCount) ||
+    hashing.bucketCount < 1
+  ) {
+    return false;
+  }
+  return true;
+}
 
 // =============================================================================
 // Types
@@ -84,12 +139,23 @@ export interface TrafficalClientOptions extends CoreClientOptions {
   decisionDeduplicationTtlMs?: number;
   /**
    * Event batch size - number of events before auto-flush (default: 10).
+   * @deprecated Use the canonical `batchSize` instead. `eventBatchSize` still works.
    */
   eventBatchSize?: number;
   /**
    * Event flush interval in milliseconds (default: 30000).
+   * @deprecated Use the canonical `flushIntervalMs` instead. `eventFlushIntervalMs` still works.
    */
   eventFlushIntervalMs?: number;
+  /** Events per delivery batch (default: 10). Canonical alias of `eventBatchSize`. */
+  batchSize?: number;
+  /** Event flush cadence in milliseconds (default: 30000). Canonical alias of `eventFlushIntervalMs`. */
+  flushIntervalMs?: number;
+  /**
+   * Maximum number of events buffered in memory before the oldest is dropped
+   * (default: 1000). Bounds memory in long-lived server processes.
+   */
+  eventMaxQueueSize?: number;
   /**
    * Timeout in milliseconds for SDK network requests — the config bundle
    * fetch and event batch POSTs (default: 10000).
@@ -97,8 +163,27 @@ export interface TrafficalClientOptions extends CoreClientOptions {
    * On timeout the request is aborted and treated exactly like a network
    * failure: config fetches fall back to the cached/local config, and event
    * batches are re-queued for retry.
+   *
+   * @deprecated Use the per-path options `configTimeoutMs`, `eventsTimeoutMs`,
+   * and `resolveTimeoutMs` instead. `requestTimeoutMs` is still honored as the
+   * legacy fallback for all three when the specific option is not provided.
    */
   requestTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for the config-bundle fetch (default: 10000).
+   * Falls back to `requestTimeoutMs` when not set.
+   */
+  configTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for event-delivery POSTs (default: 10000).
+   * Falls back to `requestTimeoutMs` when not set.
+   */
+  eventsTimeoutMs?: number;
+  /**
+   * Timeout in milliseconds for server-resolve requests (POST /v1/resolve,
+   * default: 5000). Falls back to `requestTimeoutMs` when not set.
+   */
+  resolveTimeoutMs?: number;
   /**
    * Enable debug logging for events (default: false).
    */
@@ -164,6 +249,7 @@ interface ClientState {
   etag: string | null;
   lastFetchTime: number;
   lastOfflineWarning: number;
+  lastMalformedWarning: number;
   refreshTimer: ReturnType<typeof setInterval> | null;
   isInitialized: boolean;
   serverResponse: ServerResolveResponse | null;
@@ -201,6 +287,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     etag: null,
     lastFetchTime: 0,
     lastOfflineWarning: 0,
+    lastMalformedWarning: 0,
     refreshTimer: null,
     isInitialized: false,
     serverResponse: null,
@@ -221,6 +308,13 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _exposureSessionTtlMs: number;
   /** Cache of recent decisions for attribution lookup on rewards */
   private readonly _decisionCache: Map<string, DecisionResult> = new Map();
+  /** Serialized context of the last server-mode resolve (per-call throttle). */
+  private _lastResolveContextKey: string | null = null;
+  /** Resolves once the first config load attempt completes (fail-open). */
+  private _readyResolve!: () => void;
+  private readonly _readyPromise: Promise<void> = new Promise((resolve) => {
+    this._readyResolve = resolve;
+  });
 
   constructor(options: TrafficalClientOptions) {
     this._options = {
@@ -235,7 +329,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       trackDecisions: options.trackDecisions !== false,
       evaluationMode: options.evaluationMode ?? "bundle",
     };
-    this._requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    // Config-fetch timeout: canonical configTimeoutMs wins, else legacy requestTimeoutMs.
+    this._requestTimeoutMs =
+      options.configTimeoutMs ?? options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     // Initialize DecisionClient
     this._decisionClient = new DecisionClient({
@@ -244,6 +340,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       projectId: this._options.projectId,
       env: this._options.env,
       apiKey: this._options.apiKey,
+      // Server-resolve timeout: canonical resolveTimeoutMs wins, else legacy
+      // requestTimeoutMs; undefined lets DecisionClient apply its own 5s default.
+      defaultTimeoutMs: options.resolveTimeoutMs ?? options.requestTimeoutMs,
     });
 
     // Default dev-mode schema warnings handler
@@ -262,9 +361,12 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     this._eventBatcher = new EventBatcher({
       endpoint: `${this._options.baseUrl}/v1/events/batch`,
       apiKey: options.apiKey,
-      batchSize: options.eventBatchSize,
-      flushIntervalMs: options.eventFlushIntervalMs,
-      requestTimeoutMs: options.requestTimeoutMs,
+      // Canonical batchSize/flushIntervalMs win over legacy event* names.
+      batchSize: options.batchSize ?? options.eventBatchSize,
+      flushIntervalMs: options.flushIntervalMs ?? options.eventFlushIntervalMs,
+      maxQueueSize: options.eventMaxQueueSize,
+      // Event-delivery timeout: canonical eventsTimeoutMs wins, else legacy requestTimeoutMs.
+      requestTimeoutMs: options.eventsTimeoutMs ?? options.requestTimeoutMs,
       debug: options.debugEvents,
       onError: (error) => {
         console.warn(`[Traffical] Event batching error: ${error.message}`);
@@ -305,10 +407,29 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     }
     this._startBackgroundRefresh();
     this._state.isInitialized = true;
+    this._readyResolve();
+  }
+
+  /**
+   * Resolves once the first usable config has loaded (or the SDK has failed
+   * open on an unavailable/malformed bundle). Never rejects.
+   */
+  async waitForReady(): Promise<void> {
+    return this._readyPromise;
+  }
+
+  /**
+   * Single teardown verb (spec 0.7.0 design contract). Stops background
+   * refresh and awaits a final event flush before returning.
+   */
+  async close(): Promise<void> {
+    await this.destroy();
   }
 
   /**
    * Stops background refresh and cleans up resources.
+   *
+   * @deprecated Use {@link close} instead — the canonical single teardown verb.
    */
   async destroy(): Promise<void> {
     if (this._state.refreshTimer) {
@@ -322,7 +443,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
   /**
    * Synchronous destroy for process exit handlers.
-   * Use destroy() when possible for proper cleanup.
+   *
+   * @deprecated Use {@link close} instead. This best-effort variant does not
+   * await the final flush; prefer `await close()` where you can.
    */
   destroySync(): void {
     if (this._state.refreshTimer) {
@@ -384,10 +507,23 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * 3. Local config (if remote unavailable)
    * 4. Caller defaults
    */
-  getParams<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): T {
+  getParams<T extends Record<string, ParameterValue>>(context: Context, defaults: T): T;
+  /** @deprecated Pass `(context, defaults)` positionally (spec 0.7.0 contract). */
+  getParams<T extends Record<string, ParameterValue>>(options: GetParamsOptions<T>): T;
+  getParams<T extends Record<string, ParameterValue>>(
+    contextOrOptions: Context | GetParamsOptions<T>,
+    maybeDefaults?: T
+  ): T {
+    const { context, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
+
     // Server mode: return from cached server response
     if (this._options.evaluationMode === "server" && this._state.serverResponse) {
-      const result = { ...options.defaults } as Record<string, ParameterValue>;
+      // Thread THIS call's context into a per-call resolve so the cached
+      // snapshot converges to the context actually being evaluated (server
+      // mode can't block a sync getParams() on the network; degrade to the
+      // last-good snapshot for the current call).
+      this._maybeResolveForContext(context);
+      const result = { ...defaults } as Record<string, ParameterValue>;
       for (const [key, value] of Object.entries(this._state.serverResponse.assignments)) {
         if (key in result) {
           result[key] = value;
@@ -397,7 +533,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     }
 
     const bundle = this._getEffectiveBundle();
-    return resolveParameters<T>(bundle, options.context, options.defaults);
+    return resolveParameters<T>(bundle, context, defaults);
   }
 
   /**
@@ -406,20 +542,34 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * When trackDecisions is enabled (default), automatically sends a DecisionEvent
    * to the backend for intent-to-treat analysis.
    */
-  decide<T extends Record<string, ParameterValue>>(options: { context: Context; defaults: T }): DecisionResult {
+  decide<T extends Record<string, ParameterValue>>(context: Context, defaults: T): DecisionResult;
+  /** @deprecated Pass `(context, defaults)` positionally (spec 0.7.0 contract). */
+  decide<T extends Record<string, ParameterValue>>(options: DecideOptions<T>): DecisionResult;
+  decide<T extends Record<string, ParameterValue>>(
+    contextOrOptions: Context | DecideOptions<T>,
+    maybeDefaults?: T
+  ): DecisionResult {
     const start = Date.now();
+    const { context, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
 
     // Server mode: return from cached server response
     if (this._options.evaluationMode === "server" && this._state.serverResponse) {
+      // Thread THIS call's context into a per-call resolve so the snapshot
+      // converges to the evaluated context (sync decide() can't block on the
+      // network; degrade to the last-good snapshot for the current call).
+      this._maybeResolveForContext(context);
       const resp = this._state.serverResponse;
-      const assignments = { ...options.defaults } as Record<string, ParameterValue>;
+      const assignments = { ...defaults } as Record<string, ParameterValue>;
       for (const [key, value] of Object.entries(resp.assignments)) {
         if (key in assignments) {
           assignments[key] = value;
         }
       }
       const decision: DecisionResult = {
-        decisionId: resp.decisionId,
+        // Mint a FRESH decisionId per call — never reuse the resolve
+        // response's decisionId across decisions (each decide() is a distinct
+        // decision for attribution).
+        decisionId: generateDecisionId(),
         assignments,
         // Snapshot the resolve stateVersion at decision time so events
         // built later stamp the version this decision was evaluated
@@ -428,20 +578,20 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       };
       this._cacheDecision(decision);
       if (this._options.trackDecisions) {
-        this._trackDecision(decision, Date.now() - start, Object.keys(options.defaults));
+        this._trackDecision(decision, Date.now() - start, Object.keys(defaults));
       }
       this._emitAssignmentLogEntries(decision, "decision");
       return decision;
     }
 
     const bundle = this._getEffectiveBundle();
-    const decision = coreDecide<T>(bundle, options.context, options.defaults);
+    const decision = coreDecide<T>(bundle, context, defaults);
     const latencyMs = Date.now() - start;
 
     this._cacheDecision(decision);
 
     if (this._options.trackDecisions) {
-      this._trackDecision(decision, latencyMs, Object.keys(options.defaults));
+      this._trackDecision(decision, latencyMs, Object.keys(defaults));
     }
 
     this._emitAssignmentLogEntries(decision, "decision");
@@ -540,9 +690,15 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   track<E extends Extract<keyof TEvents, string>>(
     event: E,
     properties?: TEvents[E],
-    options?: { decisionId?: string; unitKey?: string }
+    options?: TrackEventOptions
   ): void {
-    const value = typeof properties?.value === 'number' ? properties.value : undefined;
+    // Single numeric value: explicit options.value wins, else properties.value.
+    const value =
+      typeof options?.value === "number"
+        ? options.value
+        : typeof properties?.value === "number"
+          ? properties.value
+          : undefined;
 
     // Auto-populate attribution from cached decision if available
     const attribution = this._getAttributionFromCache(options?.decisionId);
@@ -557,9 +713,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       timestamp: new Date().toISOString(),
       event,
       value,
+      values: options?.values,
       properties,
       decisionId: options?.decisionId,
       attribution,
+      eventTimestamp: options?.eventTimestamp,
       sdkName: SDK_NAME,
       sdkVersion: SDK_VERSION,
     };
@@ -573,10 +731,17 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * If decisionId is provided and the decision is cached, attribution is auto-populated.
    */
   trackReward(options: TrackOptions): void {
-    // Map old API to new track() API — cast through the untyped signature
-    (this.track as (event: string, properties?: Record<string, unknown>, options?: { decisionId?: string }) => void)(
-      options.event, options.properties, { decisionId: undefined }
-    );
+    // Forward the value and decisionId (previously dropped) plus any secondary
+    // values, so rewards still carry their optimization signal + attribution.
+    (this.track as (
+      event: string,
+      properties?: Record<string, unknown>,
+      options?: TrackEventOptions
+    ) => void)(options.event, options.properties, {
+      decisionId: options.decisionId,
+      value: options.value,
+      values: options.values,
+    });
   }
 
   // ===========================================================================
@@ -648,7 +813,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * Uses ETag for efficient caching.
    */
   private async _fetchConfig(): Promise<void> {
-    const url = `${this._options.baseUrl}/v1/config/${this._options.projectId}?env=${this._options.env}`;
+    // URL-encode path/query components so an env or projectId containing
+    // reserved characters (spaces, &, ?, /) can't corrupt the request URL.
+    const url = `${this._options.baseUrl}/v1/config/${encodeURIComponent(
+      this._options.projectId
+    )}?env=${encodeURIComponent(this._options.env)}`;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -685,6 +854,14 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       const bundle = (await response.json()) as ConfigBundle;
       const etag = response.headers.get("ETag");
 
+      // A 200 can still carry a malformed body. Discard it and keep the
+      // previous last-good bundle rather than corrupting bucket assignments or
+      // falling through to defaults when we already have a valid config.
+      if (!isValidConfigBundle(bundle)) {
+        this._logMalformedBundleWarning();
+        return;
+      }
+
       this._state.bundle = bundle;
       this._state.etag = etag;
       this._state.lastFetchTime = Date.now();
@@ -705,23 +882,52 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
     if (interval <= 0) return;
 
-    this._state.refreshTimer = setInterval(() => {
-      if (this._options.evaluationMode === "server") {
-        this._fetchServerResolve({}).catch(() => {});
-      } else {
-        this._fetchConfig().catch(() => {});
-      }
-    }, interval);
+    // Reschedule via setTimeout with fresh +/-10% jitter each tick (instead of a
+    // fixed setInterval) so fleets of clients don't converge on the same refresh
+    // instant and stampede the edge.
+    const scheduleNext = () => {
+      this._state.refreshTimer = setTimeout(() => {
+        // Schedule the next tick before firing so cadence stays independent of
+        // fetch latency (matching the previous fire-and-forget setInterval).
+        scheduleNext();
+        if (this._options.evaluationMode === "server") {
+          this._fetchServerResolve({}).catch(() => {});
+        } else {
+          this._fetchConfig().catch(() => {});
+        }
+      }, jitteredInterval(interval));
 
-    // Unref so timer doesn't keep process alive
-    if (typeof this._state.refreshTimer.unref === "function") {
-      this._state.refreshTimer.unref();
-    }
+      // Unref so timer doesn't keep process alive
+      if (this._state.refreshTimer && typeof this._state.refreshTimer.unref === "function") {
+        this._state.refreshTimer.unref();
+      }
+    };
+    scheduleNext();
   }
 
   /**
    * Logs an offline warning (rate-limited).
    */
+  /**
+   * Server mode: threads the per-call context into a background /v1/resolve so
+   * the cached snapshot converges to the contexts actually being evaluated.
+   * Throttled by serialized context so repeated identical contexts (the common
+   * case) don't hammer the edge. Because decide()/getParams() are synchronous
+   * they cannot await this; the current call degrades to the last-good snapshot
+   * and subsequent calls pick up the refreshed resolution.
+   */
+  private _maybeResolveForContext(context: Context): void {
+    let key: string;
+    try {
+      key = JSON.stringify(context);
+    } catch {
+      key = "";
+    }
+    if (key === this._lastResolveContextKey) return;
+    this._lastResolveContextKey = key;
+    void this._fetchServerResolve(context);
+  }
+
   private async _fetchServerResolve(context: Context): Promise<void> {
     try {
       const response = await this._decisionClient.resolve({ context });
@@ -741,6 +947,16 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         `[Traffical] Failed to fetch config: ${error instanceof Error ? error.message : String(error)}. Using ${this._state.bundle ? "cached" : "local"} config.`
       );
       this._state.lastOfflineWarning = now;
+    }
+  }
+
+  private _logMalformedBundleWarning(): void {
+    const now = Date.now();
+    if (now - this._state.lastMalformedWarning > MALFORMED_BUNDLE_WARNING_INTERVAL_MS) {
+      console.warn(
+        `[Traffical] Discarded malformed config bundle (invalid hashing/shape). Using ${this._state.bundle ? "cached" : "local"} config.`
+      );
+      this._state.lastMalformedWarning = now;
     }
   }
 

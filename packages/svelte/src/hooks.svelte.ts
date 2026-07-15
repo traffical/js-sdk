@@ -16,14 +16,13 @@
  *   {t.decision}   // reactive ✅
  */
 
-import { resolveParameters, decide as coreDecide } from "@traffical/core";
 import type {
   ParameterValue,
   DecisionResult,
-  Context,
   TrackEventMap,
   TypedTrackFn,
 } from "@traffical/core";
+import { computeParamsFrom, computeDecisionFrom } from "./resolve.js";
 import type {
   TrafficalPlugin,
   TrafficalClient,
@@ -129,42 +128,31 @@ export function useTraffical<
   // -------------------------------------------------------------------------
 
   function computeParams(): T {
-    if (ctx.client && ctx.bundle) {
-      return ctx.client.getParams({
-        context: { ...ctx.getContext(), ...options.context },
-        defaults: options.defaults,
-      }) as T;
-    }
-
-    if (ctx.bundle) {
-      const context: Context = {
-        ...ctx.getContext(),
-        ...options.context,
-      };
-      return resolveParameters(ctx.bundle, context, options.defaults);
-    }
-
-    if (ctx.initialParams) {
-      return { ...options.defaults, ...ctx.initialParams } as T;
-    }
-
-    return options.defaults;
+    return computeParamsFrom<T>(
+      {
+        client: ctx.client,
+        bundle: ctx.bundle,
+        initialParams: ctx.initialParams,
+        getContext: ctx.getContext,
+      },
+      { defaults: options.defaults, context: options.context }
+    );
   }
 
   function computeDecision(): DecisionResult | null {
-    if (!shouldTrackDecision) return null;
-    if (!ctx.bundle) return null;
-
-    const context: Context = {
-      ...ctx.getContext(),
-      ...options.context,
-    };
-
-    if (ctx.client) {
-      return ctx.client.decide({ context, defaults: options.defaults });
-    }
-
-    return coreDecide(ctx.bundle, context, options.defaults);
+    return computeDecisionFrom<T>(
+      {
+        client: ctx.client,
+        bundle: ctx.bundle,
+        initialParams: ctx.initialParams,
+        getContext: ctx.getContext,
+      },
+      {
+        defaults: options.defaults,
+        context: options.context,
+        shouldTrackDecision,
+      }
+    );
   }
 
   // Deep $state proxy — params is a stable object reference that can be
@@ -193,11 +181,25 @@ export function useTraffical<
     decision = newDecision;
   }
 
-  // Subscribe to override and identity changes from the client
-  if (ctx.client) {
-    ctx.client.onOverridesChange(() => recompute());
-    ctx.client.onIdentityChange(() => recompute());
-  }
+  // Subscribe to override / identity / config changes and recompute. Wrapped in
+  // a $effect so the subscriptions are torn down when the component unmounts —
+  // previously these listeners were registered unconditionally at hook-call time
+  // and never removed, leaking one set per mounted component. The config-change
+  // subscription is what makes a CSR provider (no initialBundle) resolve real
+  // params once the first fetch lands.
+  $effect(() => {
+    const unsubs: Array<() => void> = [];
+    if (ctx.client) {
+      unsubs.push(ctx.client.onOverridesChange(() => recompute()));
+      unsubs.push(ctx.client.onIdentityChange(() => recompute()));
+    }
+    unsubs.push(ctx.onConfigChange(() => recompute()));
+    // Recompute once now in case config already landed between init and mount.
+    recompute();
+    return () => {
+      for (const u of unsubs) u();
+    };
+  });
 
   // Auto-track exposure when tracking is "full" and decision is available
   $effect(() => {

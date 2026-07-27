@@ -1,5 +1,14 @@
 # @traffical/openfeature-server
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [ca58edf]
+  - @traffical/core@0.11.1
+  - @traffical/node@0.10.1
+  - @traffical/openfeature-core@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes

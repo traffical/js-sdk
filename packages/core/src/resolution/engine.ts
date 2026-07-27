@@ -562,10 +562,10 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       layerId: layer.id,
       bucket,
       policyId: matchedPolicy?.id,
-      policyKey: (matchedPolicy as any)?.key,
+      policyKey: matchedPolicy?.key,
       allocationId: matchedAllocation?.id,
       allocationName: matchedAllocation?.name,
-      allocationKey: (matchedAllocation as any)?.key,
+      allocationKey: matchedAllocation?.key,
       // Propensity of the chosen allocation (adaptive policies only) and
       // the contextual model version — logged for off-policy training.
       // The events schema requires probability in (0, 1]; omit out-of-range

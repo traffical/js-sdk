@@ -161,6 +161,15 @@ export function resolveContextualPolicy(
 
 /**
  * Computes raw scores for all allocations in a policy.
+ *
+ * Coefficients are keyed by allocation `key` — the stable identifier — with
+ * `name` as the fallback for bundles produced before `key` existed. Keying by
+ * `name` alone is the silent-failure mode this indirection exists to prevent:
+ * the lookup misses for every allocation whose display name differs from its
+ * key ("Treatment A" vs "treatment-a"), those arms score
+ * `defaultAllocationScore`, and the trained model degrades to a uniform
+ * softmax with nothing raised anywhere. Locked by the sdk-spec
+ * `bundle_contextual_key_differs` vector.
  */
 function computeContextualScores(
   model: BundleContextualModel,
@@ -168,7 +177,7 @@ function computeContextualScores(
   context: Context
 ): number[] {
   return allocations.map((alloc) => {
-    const coefficients = model.coefficients[alloc.name];
+    const coefficients = model.coefficients[alloc.key ?? alloc.name];
     if (!coefficients) return model.defaultAllocationScore;
     return computeAllocationScore(coefficients, context);
   });

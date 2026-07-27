@@ -274,6 +274,11 @@ export interface BundleEntityPolicyState {
 export interface BundlePolicy {
   /** Policy ID for tracking and analytics */
   id: Id;
+  /**
+   * Stable policy identifier, emitted as `layers[].policyKey` and joined on in
+   * warehouse assignment data. Optional only for pre-`key` bundles.
+   */
+  key?: string;
   /** Current state */
   state: PolicyState;
   /** Policy kind: "static" for fixed allocations, "adaptive" for learning-based */
@@ -317,8 +322,19 @@ export interface BundlePolicy {
 export interface BundleAllocation {
   /** Unique allocation ID */
   id: Id;
-  /** Variant name for tracking (e.g., "control", "treatment_a") */
+  /**
+   * Human-readable variant name (e.g. "Control", "Treatment A").
+   * DISPLAY ONLY — never use as an identifier; see {@link BundleAllocation.key}.
+   */
   name: string;
+  /**
+   * Stable allocation identifier — the value the warehouse joins on and the
+   * key of every allocation-keyed map in the bundle (see
+   * {@link BundleContextualModel.coefficients}). Optional only for bundles
+   * produced before `key` existed: resolve as `key ?? name`, never `name`
+   * alone. See the sdk-spec "Allocation identity" contract.
+   */
+  key?: string;
   /** Bucket range [start, end] inclusive */
   bucketRange: [number, number];
   /** Parameter overrides for units in this bucket range */

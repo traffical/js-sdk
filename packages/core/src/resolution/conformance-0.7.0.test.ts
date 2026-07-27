@@ -34,6 +34,19 @@ interface BundleCaseFixture {
     }>;
     expectedAllocation?: string;
     expectedScoring?: { probabilities: number[]; selectedIndex: number };
+    /**
+     * Per-policy expectations, keyed by policy id — for bundles that exercise
+     * more than one policy per decision (see the allocation-identity vectors).
+     */
+    expectedPolicies?: Record<
+      string,
+      {
+        allocationName: string;
+        allocationKey?: string;
+        probabilities?: number[];
+        selectedIndex?: number;
+      }
+    >;
   }>;
 }
 
@@ -181,6 +194,61 @@ describe.each([
         const expectedProb = tc.expectedScoring.probabilities[tc.expectedScoring.selectedIndex];
         expect(layer!.probability).toBeDefined();
         expect(layer!.probability!).toBeCloseTo(expectedProb, 5);
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Allocation identity — `key` is the identifier, `name` is display-only
+//
+// `contextualModel.coefficients` is keyed by allocation KEY. Resolving it by
+// `name` misses on every arm whose name differs from its key, silently falls
+// back to `defaultAllocationScore`, and collapses the model to a uniform
+// softmax — a personalization model that quietly does nothing. The vectors are
+// picked so uniform selection lands on a DIFFERENT allocation than the correct
+// distribution in every case, and so that each of the three arms is the right
+// answer at least once (a name-keyed implementation cannot pass by luck).
+//
+// `policy_contextual_legacy` in the same bundle carries allocations with no
+// `key` at all and coefficients keyed by name: the `key ?? name` fallback must
+// keep resolving pre-key bundles, so this doubles as the regression guard.
+// ---------------------------------------------------------------------------
+describe("allocation identity: coefficients resolve by key, not display name", () => {
+  const { bundle, fixture } = loadPair(
+    "bundle_contextual_key_differs",
+    "expected_contextual_key_differs"
+  );
+
+  for (const tc of fixture.testCases) {
+    test(tc.name, () => {
+      const decision = decide(bundle, tc.context, defaultsFromBundle(bundle));
+
+      for (const [key, expected] of Object.entries(tc.expectedAssignments ?? {})) {
+        expect(decision.assignments[key]).toEqual(expected);
+      }
+
+      for (const [policyId, expected] of Object.entries(tc.expectedPolicies ?? {})) {
+        const layer = decision.metadata.layers.find((l) => l.policyId === policyId);
+        expect(layer, `no resolved layer for policy ${policyId}`).toBeDefined();
+        expect(layer!.allocationName).toBe(expected.allocationName);
+
+        // The event payload must carry the stable key, not just the label —
+        // it is the join column for warehouse assignment data.
+        if (expected.allocationKey !== undefined) {
+          expect(layer!.allocationKey).toBe(expected.allocationKey);
+        }
+
+        // The logged propensity pins the whole distribution, not just the
+        // winner: a uniform fallback would report 1/n here even on the rare
+        // seed where it happened to select the same arm.
+        if (expected.probabilities && expected.selectedIndex !== undefined) {
+          expect(layer!.probability).toBeDefined();
+          expect(layer!.probability!).toBeCloseTo(
+            expected.probabilities[expected.selectedIndex]!,
+            5
+          );
+        }
       }
     });
   }

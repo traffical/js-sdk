@@ -13,7 +13,8 @@
  * - `onContextChange` re-binds the context and clears the per-context decision
  *   memo, then RETURNS — the web SDK (not the provider) emits the reconcile
  *   lifecycle events (§9, finding V2).
- * - `track(name, details)` takes NO context argument (web `Tracking`).
+ * - `track(name, context, details)` — the app calls `client.track(name, details)`
+ *   and the SDK injects the bound context before calling the provider.
  * - `flagMetadata` gates BOTH `traffical.propensity` AND `traffical.modelVersion`
  *   out — browser devtools must not leak bandit selection internals (§3.5).
  */
@@ -30,7 +31,6 @@ import {
   type Provider,
   type ProviderMetadata,
   type ResolutionDetails,
-  type Tracking,
   type TrackingEventDetails,
 } from "@openfeature/web-sdk";
 
@@ -91,7 +91,11 @@ function isInertDecision(decision: DecisionResult): boolean {
   return decision.metadata.unitKeyValue === "" || decision.metadata.layers.length === 0;
 }
 
-export class TrafficalWebProvider implements Provider, Tracking {
+// Implements `Provider` only: its `CommonProvider.track?(name, context, details)`
+// is the provider-side contract. The `Tracking` interface exported by the web
+// SDK is the CLIENT-side one (`track(name, details)`) — a provider must not
+// claim to implement it, or it ends up with the wrong arity.
+export class TrafficalWebProvider implements Provider {
   public readonly metadata: ProviderMetadata = { name: PROVIDER_NAME };
 
   /** The web SDK enforces this paradigm at runtime (prevents server/web mixups). */
@@ -312,10 +316,30 @@ export class TrafficalWebProvider implements Provider, Tracking {
   }
 
   // ===========================================================================
-  // Tracking (web `Tracking` — NO context arg)
+  // Tracking
   // ===========================================================================
 
-  track(trackingEventName: string, details?: TrackingEventDetails): void {
+  /**
+   * PROVIDER-side tracking contract: `track(name, context, details)`.
+   *
+   * Note the arity. The APPLICATION calls `client.track(name, details)` — the
+   * web `Tracking` interface takes no context, because identity is the bound
+   * static context. The SDK then injects that (frozen) context and calls the
+   * PROVIDER with three arguments (`CommonProvider.track` in
+   * `@openfeature/core`). A provider that declares only `(name, details)`
+   * receives the CONTEXT as its details and silently loses every `flagKey` and
+   * reward `value`.
+   *
+   * TypeScript cannot catch this — a function with fewer parameters is
+   * assignable to one with more — so the arity is pinned by a test that drives
+   * a real `OpenFeature.getClient().track(...)` through this provider. Do not
+   * replace that test with a direct `provider.track(...)` call.
+   */
+  track(
+    trackingEventName: string,
+    context: EvaluationContext,
+    details?: TrackingEventDetails,
+  ): void {
     const exposureEventName = this.options.exposureEventName ?? EXPOSURE_EVENT_NAME;
 
     if (trackingEventName === exposureEventName) {
@@ -323,7 +347,7 @@ export class TrafficalWebProvider implements Provider, Tracking {
       return;
     }
 
-    this.routeReward(trackingEventName, details);
+    this.routeReward(trackingEventName, context, details);
   }
 
   /**
@@ -352,14 +376,24 @@ export class TrafficalWebProvider implements Provider, Tracking {
   }
 
   /**
-   * Reward route: identity comes from the bound targeting key (falling back to
-   * the client's anonymous stableId). `value` is lifted out of `details`; the
-   * rest ride as properties.
+   * Reward route: identity comes from the targeting key the SDK handed us (the
+   * frozen bound context at track time), falling back to our own copy of the
+   * bound context and then to the client's anonymous stableId. `value` is
+   * lifted out of `details`; the rest ride as properties.
    */
-  private routeReward(eventName: string, details?: TrackingEventDetails): void {
+  private routeReward(
+    eventName: string,
+    context: EvaluationContext | undefined,
+    details?: TrackingEventDetails,
+  ): void {
+    const trackedKey = context?.targetingKey;
     const boundKey = this.boundContext.targetingKey;
     const unitKey =
-      typeof boundKey === "string" && boundKey !== "" ? boundKey : this.client.getStableId?.();
+      typeof trackedKey === "string" && trackedKey !== ""
+        ? trackedKey
+        : typeof boundKey === "string" && boundKey !== ""
+          ? boundKey
+          : this.client.getStableId?.();
 
     const value = details && typeof details.value === "number" ? details.value : undefined;
     const rest: Record<string, unknown> = {};

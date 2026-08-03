@@ -1,6 +1,6 @@
 {
   "name": "@traffical/openfeature-server",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "OpenFeature server (dynamic-context) provider backed by the Traffical Node SDK",
   "type": "module",
   "main": "./dist/index.js",

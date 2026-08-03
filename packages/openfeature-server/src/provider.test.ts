@@ -23,6 +23,8 @@ import type { TrafficalProviderOptions } from "@traffical/openfeature-core";
 import {
   TrafficalServerProvider,
   createTrafficalServerProvider,
+  EXPOSURE_EVENT_NAME as ENTRY_EXPOSURE_EVENT_NAME,
+  FLAG_METADATA_PREFIX as ENTRY_FLAG_METADATA_PREFIX,
   type TrafficalServerClient,
 } from "./index.js";
 
@@ -580,3 +582,25 @@ function spyOnWarn(): { messages: string[]; restore: () => void } {
     },
   };
 }
+
+// =============================================================================
+// Public entry-point surface
+//
+// The README tells integrators to `import { EXPOSURE_EVENT_NAME } from
+// "@traffical/openfeature-server"`. Asserting it here — from "./index.js",
+// the entry consumers actually resolve — is what keeps that true. Importing it
+// from @traffical/openfeature-core (as the tests above do) passes whether or
+// not this package re-exports it, which is how the gap went unnoticed.
+// =============================================================================
+
+describe("package entry point", () => {
+  test("re-exports the reserved exposure event name", () => {
+    expect(ENTRY_EXPOSURE_EVENT_NAME).toBe("$traffical.exposure");
+    // Same identity as the shared contract — never a divergent copy.
+    expect(ENTRY_EXPOSURE_EVENT_NAME).toBe(EXPOSURE_EVENT_NAME);
+  });
+
+  test("re-exports the flagMetadata prefix", () => {
+    expect(ENTRY_FLAG_METADATA_PREFIX).toBe("traffical");
+  });
+});

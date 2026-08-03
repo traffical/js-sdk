@@ -550,3 +550,20 @@ export function createTrafficalServerProvider(
 }
 
 export default TrafficalServerProvider;
+
+// -----------------------------------------------------------------------------
+// Shared contract re-exports (mirrors @traffical/openfeature-web)
+// -----------------------------------------------------------------------------
+
+/**
+ * `EXPOSURE_EVENT_NAME` is the reserved exposure event this provider routes to
+ * `trackExposure`, and the README tells integrators to import it from here — so
+ * it must actually be exported here. The types travel with it so integrators can
+ * name the provider options / client shape without a second import.
+ */
+export { EXPOSURE_EVENT_NAME, FLAG_METADATA_PREFIX } from "@traffical/openfeature-core";
+export type {
+  TrafficalProviderOptions,
+  TrafficalClientLike,
+  OFFlagType,
+} from "@traffical/openfeature-core";

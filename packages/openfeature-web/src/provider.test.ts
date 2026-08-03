@@ -23,7 +23,7 @@
 
 import { describe, test, expect } from "bun:test";
 
-import { ProviderEvents, TargetingKeyMissingError } from "@openfeature/web-sdk";
+import { OpenFeature, ProviderEvents, TargetingKeyMissingError } from "@openfeature/web-sdk";
 import type { ConfigBundle, DecisionResult, Context, ParameterValue } from "@traffical/core";
 import { TrafficalClient } from "@traffical/js-client";
 import {
@@ -348,7 +348,7 @@ describe("TrafficalWebProvider — inert decision", () => {
 
     // Because the inert decision was NOT stored, an exposure call misses and
     // no-ops (never re-decides, never exposes).
-    provider.track(EXPOSURE_EVENT_NAME, { flagKey: "ui.color" });
+    provider.track(EXPOSURE_EVENT_NAME, { targetingKey: "u-inert" }, { flagKey: "ui.color" });
     expect(stub.exposureCalls).toHaveLength(0);
   });
 });
@@ -389,7 +389,7 @@ describe("TrafficalWebProvider — onContextChange", () => {
     expect(stub.identifyCalls).toContain("u-second");
 
     // Exposure for the old decision now misses (memo cleared) → no exposure.
-    provider.track(EXPOSURE_EVENT_NAME, { flagKey: "ui.color" });
+    provider.track(EXPOSURE_EVENT_NAME, { targetingKey: "u-second" }, { flagKey: "ui.color" });
     expect(stub.exposureCalls).toHaveLength(0);
   });
 });
@@ -438,7 +438,7 @@ describe("TrafficalWebProvider — config-change memo invalidation", () => {
 
     // A post-refresh exposure with no intervening re-resolve now MISSES the
     // (cleared) memo → drop, never stitch to the stale v1 decision.
-    provider.track(EXPOSURE_EVENT_NAME, { flagKey: "ui.color" });
+    provider.track(EXPOSURE_EVENT_NAME, { targetingKey: "u-refresh" }, { flagKey: "ui.color" });
     expect(stub.exposureCalls).toHaveLength(0);
   });
 });
@@ -456,7 +456,7 @@ describe("TrafficalWebProvider — exposure routing", () => {
     provider.resolveStringEvaluation("ui.color", "d"); // memoizes dec_stub
     const decideCallsAfterResolve = stub.decideCalls.length;
 
-    provider.track(EXPOSURE_EVENT_NAME, { flagKey: "ui.color" });
+    provider.track(EXPOSURE_EVENT_NAME, { targetingKey: "u-hit" }, { flagKey: "ui.color" });
     expect(stub.exposureCalls).toHaveLength(1);
     expect(stub.exposureCalls[0].decisionId).toBe("dec_stub");
     // Crucially: the exposure route NEVER re-decides.
@@ -469,7 +469,7 @@ describe("TrafficalWebProvider — exposure routing", () => {
     provider.onContextChange({}, { targetingKey: "u-miss" });
 
     // No resolve happened for this flag → memo miss.
-    provider.track(EXPOSURE_EVENT_NAME, { flagKey: "never.resolved" });
+    provider.track(EXPOSURE_EVENT_NAME, { targetingKey: "u-miss" }, { flagKey: "never.resolved" });
     expect(stub.exposureCalls).toHaveLength(0);
     expect(stub.decideCalls).toHaveLength(0); // never re-decides
   });
@@ -511,7 +511,7 @@ describe("TrafficalWebProvider — reward routing", () => {
     const provider = new TrafficalWebProvider(stub);
     provider.onContextChange({}, { targetingKey: "u-buyer" });
 
-    provider.track("purchase", { value: 42.5, orderId: "ord_1" });
+    provider.track("purchase", { targetingKey: "u-buyer" }, { value: 42.5, orderId: "ord_1" });
 
     expect(stub.trackCalls).toHaveLength(1);
     const call = stub.trackCalls[0];
@@ -526,7 +526,7 @@ describe("TrafficalWebProvider — reward routing", () => {
     stub.stableId = "anon_xyz";
     const provider = new TrafficalWebProvider(stub);
     // no bound targetingKey
-    provider.track("add_to_cart", { itemId: "sku_9" });
+    provider.track("add_to_cart", {}, { itemId: "sku_9" });
 
     expect(stub.trackCalls[0].options?.unitKey).toBe("anon_xyz");
   });
@@ -630,5 +630,60 @@ describe("TrafficalWebProvider — test-vector (bundle_basic)", () => {
     }
 
     await provider.onClose();
+  });
+});
+
+// =============================================================================
+// Tracking arity, driven through the REAL SDK (regression guard)
+//
+// The application calls `client.track(name, details)`; the SDK injects the
+// bound context and calls `provider.track(name, context, details)`. A provider
+// declaring only `(name, details)` therefore reads the CONTEXT as its details:
+// every exposure loses its `flagKey` (and is dropped) and every reward loses
+// its numeric `value`.
+//
+// TypeScript cannot catch that — a function with fewer parameters is assignable
+// to one with more — so these tests MUST go through `OpenFeature.getClient()`.
+// A direct `provider.track(...)` call passes either way and proves nothing.
+// =============================================================================
+
+describe("TrafficalWebProvider — tracking arity via the OpenFeature client", () => {
+  test("an exposure tracked through the SDK reaches trackExposure with its flagKey", async () => {
+    const stub = new StubClient();
+    const provider = new TrafficalWebProvider(stub);
+
+    await OpenFeature.setContext({ targetingKey: "u-sdk-exposure" });
+    await OpenFeature.setProviderAndWait("arity-exposure", provider);
+    const client = OpenFeature.getClient("arity-exposure");
+
+    // Resolve first so there is a memoized decision to stitch to.
+    client.getStringValue("ui.color", "#fallback");
+
+    client.track(EXPOSURE_EVENT_NAME, { flagKey: "ui.color" });
+
+    // If the provider read the context as its details, flagKey would be
+    // undefined, the memo lookup would miss, and this would be 0.
+    expect(stub.exposureCalls).toHaveLength(1);
+    expect(stub.exposureCalls[0].decisionId).toBe("dec_stub");
+  });
+
+  test("a reward tracked through the SDK keeps its numeric value and unit key", async () => {
+    const stub = new StubClient();
+    const provider = new TrafficalWebProvider(stub);
+
+    await OpenFeature.setContext({ targetingKey: "u-sdk-reward" });
+    await OpenFeature.setProviderAndWait("arity-reward", provider);
+    const client = OpenFeature.getClient("arity-reward");
+
+    client.track("purchase", { value: 42.5, orderId: "ord_1" });
+
+    expect(stub.trackCalls).toHaveLength(1);
+    const call = stub.trackCalls[0];
+    expect(call.event).toBe("purchase");
+    // The reward join is keyed on this; an empty unit key is unjoinable.
+    expect(call.options?.unitKey).toBe("u-sdk-reward");
+    // These come from the caller's details, NOT from the evaluation context.
+    expect(call.properties?.value).toBe(42.5);
+    expect(call.properties?.orderId).toBe("ord_1");
   });
 });

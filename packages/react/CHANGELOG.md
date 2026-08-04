@@ -1,5 +1,13 @@
 # @traffical/react
 
+## 0.6.5
+
+### Patch Changes
+
+- Updated dependencies [e5808ae]
+  - @traffical/core@0.12.0
+  - @traffical/js-client@0.17.0
+
 ## 0.6.4
 
 ### Patch Changes

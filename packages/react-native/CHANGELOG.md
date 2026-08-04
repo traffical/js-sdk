@@ -1,5 +1,13 @@
 # @traffical/react-native
 
+## 0.8.3
+
+### Patch Changes
+
+- Updated dependencies [e5808ae]
+  - @traffical/core@0.12.0
+  - @traffical/js-client@0.17.0
+
 ## 0.8.2
 
 ### Patch Changes

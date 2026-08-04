@@ -1,6 +1,6 @@
 {
   "name": "@traffical/openfeature-core",
-  "version": "0.2.1",
+  "version": "0.2.5",
   "description": "Paradigm-agnostic translation layer between Traffical decisions and OpenFeature evaluation",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@traffical/core": "0.11.1"
+    "@traffical/core": "0.12.0"
   },
   "peerDependencies": {
     "@openfeature/core": "^1.11.0"

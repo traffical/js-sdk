@@ -34,6 +34,10 @@ import {
   type TrackableEventLogger,
   type TrackEventMap,
   type OnSchemaWarnings,
+  type ResolutionReason,
+  type SdkDiagnostics,
+  ErrorPolicy,
+  validateConfigBundle,
   resolveParameters,
   decide as coreDecide,
   getUnitKeyField as coreGetUnitKeyField,
@@ -90,31 +94,6 @@ const DEFAULT_EXPOSURE_SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes (mirrors j
 function jitteredInterval(intervalMs: number): number {
   const delta = intervalMs * REFRESH_JITTER_RATIO;
   return intervalMs + (Math.random() * 2 - 1) * delta;
-}
-
-/**
- * Structural guard for a fetched config bundle. A 200 response can still carry a
- * malformed body (truncated CDN write, partial deploy); serving it would corrupt
- * every bucket assignment. Requires the hashing config the resolver depends on
- * (`unitKey` non-empty, `bucketCount` an integer >= 1) plus the top-level
- * parameters/layers arrays.
- */
-function isValidConfigBundle(bundle: unknown): bundle is ConfigBundle {
-  if (!bundle || typeof bundle !== "object") return false;
-  const b = bundle as Partial<ConfigBundle>;
-  if (!Array.isArray(b.parameters)) return false;
-  if (!Array.isArray(b.layers)) return false;
-  const hashing = b.hashing as Partial<ConfigBundle["hashing"]> | undefined;
-  if (!hashing || typeof hashing !== "object") return false;
-  if (typeof hashing.unitKey !== "string" || hashing.unitKey.length === 0) return false;
-  if (
-    typeof hashing.bucketCount !== "number" ||
-    !Number.isInteger(hashing.bucketCount) ||
-    hashing.bucketCount < 1
-  ) {
-    return false;
-  }
-  return true;
 }
 
 // =============================================================================
@@ -274,7 +253,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
   private readonly _options: Required<
     Pick<
       TrafficalClientOptions,
-      "orgId" | "projectId" | "env" | "apiKey" | "baseUrl" | "refreshIntervalMs" | "strictMode"
+      "orgId" | "projectId" | "env" | "apiKey" | "baseUrl" | "refreshIntervalMs"
     >
   > & {
     localConfig?: ConfigBundle;
@@ -293,6 +272,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     serverResponse: null,
   };
 
+  private readonly _errorPolicy: ErrorPolicy;
   private readonly _eventBatcher: EventBatcher;
   private readonly _requestTimeoutMs: number;
   private readonly _decisionDedup: DecisionDeduplicator;
@@ -325,10 +305,16 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       baseUrl: options.baseUrl || DEFAULT_BASE_URL,
       localConfig: options.localConfig,
       refreshIntervalMs: options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
-      strictMode: options.strictMode ?? false,
       trackDecisions: options.trackDecisions !== false,
       evaluationMode: options.evaluationMode ?? "bundle",
     };
+    // Tiered error containment. Constructed first so every path below can
+    // route through it. Tier 1 (side effects) ignores onResolutionError.
+    this._errorPolicy = new ErrorPolicy({
+      onResolutionError: options.onResolutionError,
+      onError: options.onError,
+    });
+
     // Config-fetch timeout: canonical configTimeoutMs wins, else legacy requestTimeoutMs.
     this._requestTimeoutMs =
       options.configTimeoutMs ?? options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
@@ -389,10 +375,61 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     this._exposureDedup = options.deduplicateExposures !== false ? new Map<string, number>() : null;
     this._exposureSessionTtlMs = options.exposureSessionTtlMs ?? DEFAULT_EXPOSURE_SESSION_TTL_MS;
 
-    // Initialize with local config if provided
+    // Initialize with local config if provided.
+    //
+    // `localConfig` is validated on exactly the same terms as a fetched bundle.
+    // It used to be trusted implicitly, which had it backwards: the bundle
+    // arriving over TLS from our own edge was checked, and the one a customer
+    // hand-assembles, commits, and may hand-edit was not. A rejected local
+    // bundle is dropped whole — the client then serves caller defaults until a
+    // valid bundle arrives, rather than resolving against a broken one.
     if (this._options.localConfig) {
-      this._state.bundle = this._options.localConfig;
+      const validation = validateConfigBundle(this._options.localConfig);
+      if (validation.ok) {
+        this._state.bundle = this._options.localConfig;
+      } else {
+        this._errorPolicy.recordRejectedBundle(
+          "localConfig",
+          validation.path,
+          validation.reason
+        );
+        this._options.localConfig = undefined;
+      }
     }
+  }
+
+  /**
+   * Counters for degradation that is otherwise invisible: contained resolution
+   * errors, dropped assignment/event log rows, rejected bundles, and the most
+   * recent contained error.
+   *
+   * Monotonic for the life of the client. Poll it, or pass `onError` for a
+   * push-based bridge into your own telemetry.
+   */
+  getDiagnostics(): SdkDiagnostics {
+    return this._errorPolicy.getDiagnostics();
+  }
+
+  /**
+   * The result a contained resolution failure returns: the caller's defaults,
+   * with `metadata.reason` saying why. Shaped like a real DecisionResult so
+   * callers never have to null-check, and carrying a real decisionId so an
+   * event built from it is still traceable.
+   */
+  private _degradedDecision<T extends Record<string, ParameterValue>>(
+    defaults: T,
+    reason: ResolutionReason
+  ): DecisionResult {
+    return {
+      decisionId: generateDecisionId(),
+      assignments: { ...defaults },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        unitKeyValue: "",
+        layers: [],
+        reason,
+      },
+    };
   }
 
   /**
@@ -515,7 +552,14 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     maybeDefaults?: T
   ): T {
     const { context, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
+    return this._errorPolicy.resolve("getParams", () =>
+      this._getParamsImpl<T>(context, defaults), () => ({ ...defaults }));
+  }
 
+  private _getParamsImpl<T extends Record<string, ParameterValue>>(
+    context: Context,
+    defaults: T
+  ): T {
     // Server mode: return from cached server response
     if (this._options.evaluationMode === "server" && this._state.serverResponse) {
       // Thread THIS call's context into a per-call resolve so the cached
@@ -549,8 +593,19 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     contextOrOptions: Context | DecideOptions<T>,
     maybeDefaults?: T
   ): DecisionResult {
-    const start = Date.now();
     const { context, defaults } = normalizeEvalArgs<T>(contextOrOptions, maybeDefaults);
+    return this._errorPolicy.resolve(
+      "decide",
+      () => this._decideImpl<T>(context, defaults),
+      () => this._degradedDecision(defaults, "error")
+    );
+  }
+
+  private _decideImpl<T extends Record<string, ParameterValue>>(
+    context: Context,
+    defaults: T
+  ): DecisionResult {
+    const start = Date.now();
 
     // Server mode: return from cached server response
     if (this._options.evaluationMode === "server" && this._state.serverResponse) {
@@ -574,7 +629,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         // Snapshot the resolve stateVersion at decision time so events
         // built later stamp the version this decision was evaluated
         // against (not whatever response is cached at event-build time).
-        metadata: { ...resp.metadata, configVersion: resp.stateVersion },
+        metadata: {
+          ...resp.metadata,
+          configVersion: resp.stateVersion,
+          reason: resp.metadata.layers?.some((l) => l.policyId) ? "resolved" : "default",
+        },
       };
       this._cacheDecision(decision);
       if (this._options.trackDecisions) {
@@ -587,6 +646,15 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     const bundle = this._getEffectiveBundle();
     const decision = coreDecide<T>(bundle, context, defaults);
     const latencyMs = Date.now() - start;
+
+    // Why these values: a matched policy, parameter/caller defaults, or no
+    // usable bundle at all. Visible in the return value so a caller can detect
+    // degradation without catching anything.
+    decision.metadata.reason = !bundle
+      ? "no-bundle"
+      : decision.metadata.layers.some((l) => l.policyId)
+        ? "resolved"
+        : "default";
 
     this._cacheDecision(decision);
 
@@ -612,6 +680,10 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * exposure event for contextual bandit training.
    */
   trackExposure(decision: DecisionResult): void {
+    this._errorPolicy.resolve("trackExposure", () => this._trackExposureImpl(decision), () => undefined);
+  }
+
+  private _trackExposureImpl(decision: DecisionResult): void {
     const unitKey = decision.metadata.unitKeyValue;
     if (!unitKey) {
       return;
@@ -692,6 +764,14 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
     properties?: TEvents[E],
     options?: TrackEventOptions
   ): void {
+    this._errorPolicy.resolve("track", () => this._trackImpl(event, properties, options), () => undefined);
+  }
+
+  private _trackImpl<E extends Extract<keyof TEvents, string>>(
+    event: E,
+    properties?: TEvents[E],
+    options?: TrackEventOptions
+  ): void {
     // Single numeric value: explicit options.value wins, else properties.value.
     const value =
       typeof options?.value === "number"
@@ -762,6 +842,9 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
     for (const layer of decision.metadata.layers) {
       if (!layer.policyId || !layer.allocationName) continue;
+      // Bind the narrowed values: the closure below loses the guard's narrowing.
+      const policyId = layer.policyId;
+      const allocationName = layer.allocationName;
 
       if (this._assignmentLoggerDedup) {
         const dedupKey = `${unitKey}:${layer.policyId}:${layer.allocationName}:${type}`;
@@ -776,15 +859,20 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         this._assignmentLoggerDedup.set(dedupKey, now + ASSIGNMENT_LOGGER_LRU_TTL_MS);
       }
 
-      this._assignmentLogger({
+      // Tier 1: the customer's sink must never change a caller's answer, in
+      // any mode. A bounded queue throws precisely when traffic spikes, so
+      // letting this fall through to defaults would put a load-correlated
+      // confound directly into the treatment assignment.
+      this._errorPolicy.sideEffect("assignmentLogger", "assignmentLog", () =>
+        this._assignmentLogger!({
         unitKey,
-        policyId: layer.policyId,
+        policyId,
         // Stable keys are what warehouse assignment definitions join on
         // (`policy_key` / `allocation_key`); the `*_id` fields are opaque.
         // Mirrors js-client/PHP/Python/iOS — omitting these silently yields
         // zero-row metrics in a BYO-warehouse pipeline.
         policyKey: layer.policyKey,
-        allocationName: layer.allocationName,
+        allocationName,
         allocationKey: layer.allocationKey,
         timestamp: decision.metadata.timestamp,
         layerId: layer.layerId,
@@ -803,7 +891,8 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
         probability: layer.probability,
         modelVersion: layer.modelVersion,
         configVersion,
-      });
+        })
+      );
     }
   }
 
@@ -860,10 +949,16 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       const bundle = (await response.json()) as ConfigBundle;
       const etag = response.headers.get("ETag");
 
-      // A 200 can still carry a malformed body. Discard it and keep the
+      // A 200 can still carry a malformed body. Discard it whole and keep the
       // previous last-good bundle rather than corrupting bucket assignments or
       // falling through to defaults when we already have a valid config.
-      if (!isValidConfigBundle(bundle)) {
+      const validation = validateConfigBundle(bundle);
+      if (!validation.ok) {
+        this._errorPolicy.recordRejectedBundle(
+          "fetchConfig",
+          validation.path,
+          validation.reason
+        );
         this._logMalformedBundleWarning();
         return;
       }
@@ -972,11 +1067,11 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    */
   private _dispatchEvent(event: TrackableEvent): void {
     if (this._byoEventLogger) {
-      try {
-        this._byoEventLogger(event);
-      } catch {
-        // Swallow BYO logger errors — they must not break SDK event handling.
-      }
+      // Tier 1, same contract as the assignment logger — now counted rather
+      // than silently swallowed.
+      this._errorPolicy.sideEffect("eventLogger", "eventLog", () =>
+        this._byoEventLogger!(event)
+      );
     }
     if (!this._disableCloudEvents) {
       this._eventBatcher.log(event);

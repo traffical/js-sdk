@@ -45,6 +45,11 @@ export {
 } from "./client.js";
 
 // Export components for advanced usage
+/**
+ * @deprecated Superseded by `ErrorPolicy` from `@traffical/core`, which the
+ * client now uses. `ErrorBoundary` had no tiering, so a failing side effect
+ * could discard a resolution result. Still exported for back-compat.
+ */
 export { ErrorBoundary, type ErrorBoundaryOptions } from "./error-boundary.js";
 export { EventLogger, type EventLoggerOptions } from "./event-logger.js";
 export { ExposureDeduplicator, type ExposureDeduplicatorOptions } from "./exposure-dedup.js";

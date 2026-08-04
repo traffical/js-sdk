@@ -5,6 +5,8 @@
  * They are designed to be self-contained and independent of the control-plane package.
  */
 
+import type { OnResolutionError, ResolutionReason } from "../safety/error-policy.js";
+
 // =============================================================================
 // Base Types
 // =============================================================================
@@ -484,6 +486,15 @@ export interface DecisionMetadata {
    * time. Omitted on cold start (no bundle yet).
    */
   configVersion?: string;
+  /**
+   * Why this decision carries the values it does. Mirrors OpenFeature's
+   * `reason`, and exists so degradation is visible in the return value rather
+   * than only in logs — a swallowed exception can be missed, a field cannot.
+   *
+   * `"error"` means resolution failed and `assignments` are the caller's
+   * defaults. Omitted by SDKs/paths that predate the field.
+   */
+  reason?: ResolutionReason;
 }
 
 // =============================================================================
@@ -703,8 +714,29 @@ export interface TrafficalClientOptions {
   localConfig?: ConfigBundle;
   /** Refresh interval in milliseconds (default: 60000) */
   refreshIntervalMs?: number;
-  /** Strict mode: throw on unknown or deprecated parameters */
-  strictMode?: boolean;
+  /**
+   * What a resolution failure does (default: `"default"`).
+   *
+   * - `"default"` — `decide()`/`getParams()` return the caller's defaults and
+   *   stamp `metadata.reason: "error"`. The right choice in production: the SDK
+   *   sits in the request path of a product it does not own.
+   * - `"throw"` — rethrow, so a broken bundle or integration is loud. Useful in
+   *   CI and staging.
+   *
+   * This governs **resolution only**. Customer-supplied callbacks
+   * (`assignmentLogger`, `eventLogger`, `onError`) are always contained and
+   * never rethrow, in either mode — a delivery sink that fails must cost you a
+   * log row, never a variant.
+   */
+  onResolutionError?: OnResolutionError;
+  /**
+   * Called for every contained error, with a short tag and the error.
+   * Deduplicated per `tag:name:message`. Errors it throws are swallowed.
+   *
+   * Use it to bridge SDK degradation into your own telemetry; pair it with
+   * `getDiagnostics()` for counters.
+   */
+  onError?: (tag: string, error: Error) => void;
 
   /**
    * Optional callback for routing assignment events to a customer-managed

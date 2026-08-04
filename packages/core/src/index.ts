@@ -177,3 +177,18 @@ export type {
   ServerResolveResponse,
 } from "./decision/index.js";
 
+// Safety layer — tiered error containment and deep bundle validation
+export {
+  ErrorPolicy,
+  validateConfigBundle,
+  isValidConfigBundle,
+  type ErrorPolicyOptions,
+  type OnResolutionError,
+  type ResolutionReason,
+  type SdkDiagnostics,
+  type SideEffectKind,
+  type BundleValidationResult,
+  type BundleValidationFailure,
+  type BundleValidationSuccess,
+} from "./safety/index.js";
+

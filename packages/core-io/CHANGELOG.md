@@ -1,5 +1,12 @@
 # @traffical/core-io
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies [e5808ae]
+  - @traffical/core@0.12.0
+
 ## 0.7.0
 
 ### Minor Changes

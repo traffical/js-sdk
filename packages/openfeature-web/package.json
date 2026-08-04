@@ -1,6 +1,6 @@
 {
   "name": "@traffical/openfeature-web",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "OpenFeature web (static-context) provider backed by the Traffical browser SDK",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
   "dependencies": {
     "@traffical/core": "0.11.1",
     "@traffical/openfeature-core": "0.2.1",
-    "@traffical/js-client": "0.16.1"
+    "@traffical/js-client": "0.16.2"
   },
   "peerDependencies": {
     "@openfeature/web-sdk": "^1.9.0"

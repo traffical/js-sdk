@@ -779,7 +779,13 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
       this._assignmentLogger({
         unitKey,
         policyId: layer.policyId,
+        // Stable keys are what warehouse assignment definitions join on
+        // (`policy_key` / `allocation_key`); the `*_id` fields are opaque.
+        // Mirrors js-client/PHP/Python/iOS — omitting these silently yields
+        // zero-row metrics in a BYO-warehouse pipeline.
+        policyKey: layer.policyKey,
         allocationName: layer.allocationName,
+        allocationKey: layer.allocationKey,
         timestamp: decision.metadata.timestamp,
         layerId: layer.layerId,
         allocationId: layer.allocationId,

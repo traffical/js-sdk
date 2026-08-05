@@ -1,5 +1,54 @@
 # @traffical/react-native
 
+## 0.8.4
+
+### Patch Changes
+
+- e92089d: Docs: use real Traffical key formats in examples, and the right key kind per example.
+
+  Every example showed a Stripe-shaped placeholder — `apiKey: 'pk_...'`,
+  `api_key="sk_..."`, `'your_sdk_key'` — none of which is a Traffical key. That was
+  always wrong, and it became actively misleading now that `traffical_pk_` is a real
+  key class: `pk_...` reads like a truncated genuine key rather than a placeholder.
+
+  Examples now show `traffical_pk_…` or `traffical_sk_…`, chosen per example by where
+  the code runs. Browser packages (`js-client`, `react`, `react-native`, `svelte`,
+  `openfeature-web`) show the publishable key; `node` shows the server key.
+
+  Two specifics worth calling out:
+
+  - **Server-Evaluated Mode needs a server key.** `/v1/resolve` rejects publishable
+    keys, so `evaluationMode: 'server'` only works from a backend. The root README now
+    says so explicitly instead of leaving it to a 403.
+  - **Browser env vars are now named for the key they hold** — `PUBLIC_TRAFFICAL_PUBLISHABLE_KEY`
+    (SvelteKit) and `NEXT_PUBLIC_TRAFFICAL_PUBLISHABLE_KEY` (Next.js), each with a note
+    that the value is compiled into the client bundle and must be a `traffical_pk_…`
+    key. Nothing in the SDKs reads these names — you pass `apiKey` yourself — so this
+    is a documentation change, not a breaking one.
+
+  Documentation only. No runtime behaviour changed in any package.
+
+- 88bed23: Docs: publishable keys require `evaluationMode: 'bundle'` in React Native.
+
+  This package defaults to `evaluationMode: 'server'`, which resolves through
+  `/v1/resolve`. That endpoint rejects publishable (`traffical_pk_…`) keys, so a
+  React Native app following the quick-start with a `pk` got a `403` on every
+  resolution with nothing explaining why.
+
+  The quick-start now sets `evaluationMode: 'bundle'` explicitly, and both the
+  config table and a callout state the constraint. Bundle mode fetches the config
+  bundle once and resolves on-device — no per-decision network call, works offline,
+  and it is the recommended mode for mobile regardless of key type.
+
+  Server-evaluated mode still requires a server-side SDK key (`traffical_sk_…`),
+  which must not ship in a mobile binary — in practice that means proxying
+  resolution through your own backend.
+
+  Documentation only. No runtime behaviour or defaults changed.
+
+- Updated dependencies [e92089d]
+  - @traffical/js-client@0.17.1
+
 ## 0.8.3
 
 ### Patch Changes

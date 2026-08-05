@@ -24,7 +24,7 @@ function App() {
         orgId: 'org_123',
         projectId: 'proj_456',
         env: 'production',
-        apiKey: 'pk_...',
+        apiKey: 'traffical_pk_…',
       }}
     >
       <MyComponent />
@@ -949,11 +949,15 @@ import configBundle from '@/data/config-bundle.json';
 export const trafficalConfig = {
   orgId: process.env.NEXT_PUBLIC_TRAFFICAL_ORG_ID,
   projectId: process.env.NEXT_PUBLIC_TRAFFICAL_PROJECT_ID,
-  apiKey: process.env.NEXT_PUBLIC_TRAFFICAL_API_KEY,
+  apiKey: process.env.NEXT_PUBLIC_TRAFFICAL_PUBLISHABLE_KEY,
   // This is the key to flicker-free SSR!
   localConfig: configBundle as ConfigBundle,
 };
 ```
+
+> **Use a publishable key here.** `NEXT_PUBLIC_*` variables are inlined into the
+> client bundle, so this must be a `traffical_pk_…` key — never the server key
+> (`traffical_sk_…`), which grants access to your full ruleset.
 
 #### Step 5: TrafficalWrapper Uses UserId
 

@@ -26,11 +26,15 @@ pnpm add @traffical/svelte
 
 In your root layout, initialize Traffical:
 
+> **Use a publishable key here.** Anything under `$env/static/public` is compiled
+> into the browser bundle, so this must be a `traffical_pk_…` key — never the
+> server key (`traffical_sk_…`), which grants access to your full ruleset.
+
 ```svelte
 <!-- src/routes/+layout.svelte -->
 <script lang="ts">
   import { TrafficalProvider } from '@traffical/svelte';
-  import { PUBLIC_TRAFFICAL_API_KEY } from '$env/static/public';
+  import { PUBLIC_TRAFFICAL_PUBLISHABLE_KEY } from '$env/static/public';
 
   let { data, children } = $props();
 </script>
@@ -40,7 +44,7 @@ In your root layout, initialize Traffical:
     orgId: 'org_123',
     projectId: 'proj_456',
     env: 'production',
-    apiKey: PUBLIC_TRAFFICAL_API_KEY,
+    apiKey: PUBLIC_TRAFFICAL_PUBLISHABLE_KEY,
     initialBundle: data.traffical?.bundle,
   }}
 >
@@ -313,7 +317,7 @@ Function-based alternative to the Provider component.
     orgId: 'org_123',
     projectId: 'proj_456',
     env: 'production',
-    apiKey: 'pk_...',
+    apiKey: 'traffical_pk_…',
   });
 </script>
 ```
@@ -416,7 +420,7 @@ const traffical = await createTrafficalClient({
   orgId: 'org_123',
   projectId: 'proj_456',
   env: 'production',
-  apiKey: 'sk_...',
+  apiKey: 'traffical_sk_…',
 });
 
 // Make decisions with tracking
@@ -444,7 +448,7 @@ const { bundle, error } = await loadTrafficalBundle({
   orgId: 'org_123',
   projectId: 'proj_456',
   env: 'production',
-  apiKey: 'pk_...',
+  apiKey: 'traffical_pk_…',
   fetch, // SvelteKit's fetch
 });
 ```

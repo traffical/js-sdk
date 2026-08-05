@@ -21,7 +21,7 @@ import { OpenFeature } from "@openfeature/web-sdk";
 import { TrafficalClient } from "@traffical/js-client";
 import { TrafficalWebProvider } from "@traffical/openfeature-web";
 
-const client = new TrafficalClient({ apiKey: "pk_...", /* ... */ });
+const client = new TrafficalClient({ apiKey: "traffical_pk_…", /* ... */ });
 
 await OpenFeature.setContext({ targetingKey: user.id, plan: user.plan });
 await OpenFeature.setProviderAndWait(new TrafficalWebProvider(client));

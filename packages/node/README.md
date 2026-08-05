@@ -16,7 +16,7 @@ bun add @traffical/node
 import { TrafficalClient } from '@traffical/node';
 
 const client = new TrafficalClient({
-  apiKey: 'sk_...', // Server-side API key
+  apiKey: 'traffical_sk_…', // Server-side API key
 });
 
 // Get parameters for a user
@@ -47,7 +47,7 @@ const client = new TrafficalClient({
   orgId: 'org_...',
   projectId: 'proj_...',
   env: 'production',
-  apiKey: 'sk_...',
+  apiKey: 'traffical_sk_…',
 
   // Optional
   baseUrl: 'https://sdk.traffical.io', // Custom edge endpoint
@@ -115,7 +115,7 @@ The Node SDK automatically batches events for efficiency:
 
 ```typescript
 const client = new TrafficalClient({
-  apiKey: 'sk_...',
+  apiKey: 'traffical_sk_…',
   batchSize: 10,          // Events per batch (default: 10)
   flushIntervalMs: 30000, // Flush interval in ms (default: 30s)
 });
@@ -183,7 +183,7 @@ type TypedTrack = <E extends Extract<keyof TrafficalEventProperties, string>>(
   }
 ) => Promise<void>;
 
-const client = new TrafficalClient({ apiKey: 'sk_...' });
+const client = new TrafficalClient({ apiKey: 'traffical_sk_…' });
 export const track = client.track.bind(client) as unknown as TypedTrack;
 ```
 

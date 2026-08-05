@@ -47,7 +47,7 @@ const client = new TrafficalClient({
   orgId: "org_...",
   projectId: "prj_...",
   env: "production",
-  apiKey: "your_sdk_key",
+  apiKey: "traffical_sk_…",
   assignmentLogger: (entry) => {
     // Forward to your HTTP API, Segment, RudderStack, etc.
   },

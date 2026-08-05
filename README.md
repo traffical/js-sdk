@@ -35,7 +35,7 @@ function App() {
         orgId: 'org_123',
         projectId: 'proj_456',
         env: 'production',
-        apiKey: 'pk_...',
+        apiKey: 'traffical_pk_…',
       }}
     >
       <MyComponent />
@@ -75,7 +75,7 @@ function App() {
         orgId: 'org_123',
         projectId: 'proj_456',
         env: 'production',
-        apiKey: 'pk_...',
+        apiKey: 'traffical_pk_…',
       }}
       loadingComponent={<ActivityIndicator />}
     >
@@ -120,7 +120,7 @@ Initialize the client once at the root of your app:
     orgId: 'org_123',
     projectId: 'proj_456',
     env: 'production',
-    apiKey: 'pk_...',
+    apiKey: 'traffical_pk_…',
   });
 </script>
 
@@ -192,10 +192,14 @@ For environments where bundle-based resolution isn't ideal, the SDK supports ser
 
 ```typescript
 const client = createTrafficalClient({
-  apiKey: 'pk_...',
+  apiKey: 'traffical_sk_…',
   evaluationMode: 'server', // default: 'bundle'
 });
 ```
+
+> **This mode needs a server key.** `/v1/resolve` rejects publishable
+> (`traffical_pk_…`) keys, so server-evaluated mode only works from your backend.
+> Bundle mode — the default — works with either.
 
 React Native uses server-evaluated mode by default and re-resolves decisions on identity changes.
 
@@ -212,7 +216,7 @@ const logger = createWarehouseNativeLoggerPlugin({
 });
 
 const client = createTrafficalClient({
-  apiKey: 'pk_...',
+  apiKey: 'traffical_pk_…',
   assignmentLogger: logger,
 });
 ```
@@ -235,7 +239,7 @@ The debug plugin exposes SDK state via `window.__TRAFFICAL_DEBUG__` for consumpt
 import { createDebugPlugin } from '@traffical/js-client';
 
 const client = createTrafficalClient({
-  apiKey: 'pk_...',
+  apiKey: 'traffical_pk_…',
   plugins: [createDebugPlugin()],
 });
 ```
@@ -260,7 +264,7 @@ URL split testing and redirect experiments with cookie-based attribution:
 import { createRedirectPlugin } from '@traffical/js-client';
 
 const client = createTrafficalClient({
-  apiKey: 'pk_...',
+  apiKey: 'traffical_pk_…',
   plugins: [createRedirectPlugin()],
 });
 ```
@@ -270,7 +274,7 @@ const client = createTrafficalClient({
 Extend SDK behavior with plugins — attach at init or late via `client.use()`:
 
 ```typescript
-const client = createTrafficalClient({ apiKey: 'pk_...' });
+const client = createTrafficalClient({ apiKey: 'traffical_pk_…' });
 
 // Late plugin attachment
 client.use(createDebugPlugin());

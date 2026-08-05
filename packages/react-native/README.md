@@ -29,7 +29,7 @@ function App() {
         orgId: 'org_123',
         projectId: 'proj_456',
         env: 'production',
-        apiKey: 'pk_...',
+        apiKey: 'traffical_pk_…',
       }}
       loadingComponent={<ActivityIndicator size="large" />}
     >

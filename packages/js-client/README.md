@@ -29,7 +29,7 @@ const traffical = await createTrafficalClient({
   orgId: 'org_xxx',
   projectId: 'proj_xxx',
   env: 'production',
-  apiKey: 'pk_xxx',
+  apiKey: 'traffical_pk_…',
 });
 
 // Get parameters
@@ -67,7 +67,7 @@ traffical.track('checkout_complete', { value: 1 }, { decisionId: decision.decisi
     orgId: 'org_xxx',
     projectId: 'proj_xxx',
     env: 'production',
-    apiKey: 'pk_xxx',
+    apiKey: 'traffical_pk_…',
   }).then(function(traffical) {
     var params = traffical.getParams({
       context: { userId: 'user_123' },
@@ -187,7 +187,7 @@ const traffical = await createTrafficalClient({
   orgId: 'org_xxx',
   projectId: 'proj_xxx',
   env: 'production',
-  apiKey: 'pk_xxx',
+  apiKey: 'traffical_pk_…',
   plugins: [
     createDOMBindingPlugin({
       observeMutations: true,  // Watch for DOM changes (SPA support)
@@ -231,7 +231,7 @@ const traffical = await createTrafficalClient({
   orgId: 'org_xxx',
   projectId: 'proj_xxx',
   env: 'production',
-  apiKey: 'pk_xxx',
+  apiKey: 'traffical_pk_…',
   plugins: [
     createRedirectPlugin(),
     createRedirectAttributionPlugin(),

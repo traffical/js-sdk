@@ -1,6 +1,6 @@
 {
   "name": "@traffical/react",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Traffical SDK for React - Provider and hooks for parameter resolution",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@traffical/core": "0.12.0",
-    "@traffical/js-client": "0.17.0"
+    "@traffical/js-client": "0.17.1"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^15",

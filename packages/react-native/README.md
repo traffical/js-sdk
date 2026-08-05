@@ -30,6 +30,7 @@ function App() {
         projectId: 'proj_456',
         env: 'production',
         apiKey: 'traffical_pk_…',
+        evaluationMode: 'bundle', // required with a publishable key — see below
       }}
       loadingComponent={<ActivityIndicator size="large" />}
     >
@@ -38,6 +39,20 @@ function App() {
   );
 }
 ```
+
+> **Publishable keys need `evaluationMode: 'bundle'`.**
+>
+> This package defaults to `evaluationMode: 'server'`, which calls `/v1/resolve`.
+> That endpoint rejects publishable (`traffical_pk_…`) keys, so leaving the
+> default in place with a `pk` returns `403` on every resolution.
+>
+> Set `evaluationMode: 'bundle'` and the SDK fetches the config bundle once and
+> resolves on-device — no per-decision network call, works offline, and it is the
+> mode we recommend for mobile regardless of key type.
+>
+> If you specifically need server-evaluated mode, it requires a server-side SDK
+> key (`traffical_sk_…`), which must not ship in a mobile binary. In practice that
+> means proxying resolution through your own backend.
 
 ### 2. Use the `useTraffical` hook in your screens
 
@@ -98,7 +113,7 @@ Initializes the Traffical client with React Native defaults and provides it to c
 | `config.env` | `string` | Yes | Environment (e.g., "production", "staging") |
 | `config.apiKey` | `string` | Yes | API key for authentication |
 | `config.baseUrl` | `string` | No | Base URL for the control plane API |
-| `config.evaluationMode` | `"server" \| "bundle"` | No | Resolution mode (default: `"server"`) |
+| `config.evaluationMode` | `"server" \| "bundle"` | No | Resolution mode (default: `"server"`). Use `"bundle"` with a publishable key — `"server"` calls `/v1/resolve`, which rejects `traffical_pk_…` keys |
 | `config.refreshIntervalMs` | `number` | No | Background refresh interval (default: 60000) |
 | `config.unitKeyFn` | `() => string` | No | Function to get the unit key. If not provided, uses automatic stable ID |
 | `config.contextFn` | `() => Context` | No | Function to get additional context |

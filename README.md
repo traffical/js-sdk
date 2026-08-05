@@ -201,7 +201,18 @@ const client = createTrafficalClient({
 > (`traffical_pk_…`) keys, so server-evaluated mode only works from your backend.
 > Bundle mode — the default — works with either.
 
-React Native uses server-evaluated mode by default and re-resolves decisions on identity changes.
+**React Native defaults to server-evaluated mode** and re-resolves decisions on
+identity changes. Because that mode requires a server key, a React Native app
+using a publishable key must set `evaluationMode: 'bundle'` explicitly:
+
+```typescript
+<TrafficalRNProvider
+  config={{ apiKey: 'traffical_pk_…', evaluationMode: 'bundle' }}
+>
+```
+
+Leaving the default in place with a `pk` returns `403` on every resolution. See
+the [React Native README](./packages/react-native/README.md) for the full note.
 
 ### Warehouse-Native Assignment Logging
 

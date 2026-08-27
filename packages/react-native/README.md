@@ -413,10 +413,10 @@ function PaywallScreen() {
 
 ### 1. Always Provide Sensible Defaults
 
-Defaults are used when no experiment is running, the user doesn't match targeting, or the SDK is still loading.
+Defaults are used when no policy is running, the user doesn't match targeting, or the SDK is still loading.
 
 ```tsx
-// ✅ Good: works without any experiment
+// ✅ Good: works without any policy
 const { params } = useTraffical({
   defaults: {
     'pricing.discount': 0,
@@ -463,7 +463,7 @@ category.subcategory.name
 
 feature.*     → Feature flags        (boolean)
 ui.*          → Visual variations    (string, number)
-pricing.*     → Pricing experiments  (number)
+pricing.*     → Pricing policies     (number)
 copy.*        → Copywriting tests    (string)
 onboarding.*  → Onboarding flow      (mixed)
 ```

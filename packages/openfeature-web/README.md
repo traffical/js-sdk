@@ -40,7 +40,7 @@ const enabled = of.getBooleanValue("checkout.newFlow", false);
 const color = of.getStringValue("ui.color", "blue");
 ```
 
-Resolvers are synchronous. The `variant`, `reason` (`SPLIT` when a variant was assigned, else `DEFAULT`), and scalar `traffical.*` `flagMetadata` come from the decision.
+Resolvers are synchronous. The `variant`, `reason` (`SPLIT` when an allocation was assigned, else `DEFAULT`), and scalar `traffical.*` `flagMetadata` come from the decision.
 
 ## Exposure — the `$traffical.exposure` convention
 

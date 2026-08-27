@@ -152,7 +152,7 @@ export interface BundleContextLogging {
  * Contextual bandit model in the bundle.
  *
  * Used for linear_contextual policies. The SDK uses these coefficients
- * to compute per-allocation scores and select variants via softmax.
+ * to compute per-allocation scores and select allocations via softmax.
  */
 export interface BundleContextualModel {
   /** Softmax temperature (0-1). Lower = more deterministic. */
@@ -311,7 +311,7 @@ export interface BundlePolicy {
    */
   entityConfig?: EntityConfig;
   /**
-   * Optional bucket eligibility range for non-overlapping experiments.
+   * Optional bucket eligibility range for non-overlapping policies.
    * When set, this policy only applies to users whose bucket falls within [start, end].
    * If not set, the policy applies to all buckets (default behavior).
    */
@@ -325,7 +325,7 @@ export interface BundleAllocation {
   /** Unique allocation ID */
   id: Id;
   /**
-   * Human-readable variant name (e.g. "Control", "Treatment A").
+   * Human-readable allocation name (e.g. "Control", "Treatment A").
    * DISPLAY ONLY — never use as an identifier; see {@link BundleAllocation.key}.
    */
   name: string;
@@ -399,7 +399,7 @@ export interface LayerResolution {
   policyKey?: string;
   /** The allocation ID that was selected (if any) */
   allocationId?: Id;
-  /** The allocation/variant name that was selected (if any) */
+  /** The allocation name that was selected (if any) */
   allocationName?: string;
   /** Stable key of the matched allocation (for warehouse data matching) */
   allocationKey?: string;
@@ -445,7 +445,7 @@ export interface LayerResolution {
    * Attribution-only layers are included in decision events and track-event
    * attribution (enabling intent-to-treat analysis and metric joins) but are
    * skipped by `trackExposure()` to avoid inflating exposure counts for
-   * experiments the user didn't actually see.
+   * policies the user didn't actually see.
    */
   attributionOnly?: boolean;
 }
@@ -594,8 +594,8 @@ export interface TrackEvent extends BaseEventFields {
  * - Debugging: understanding why specific values were computed
  * - Audit trail: tracking all decisions made by the SDK
  *
- * Unlike ExposureEvent which is tracked when the user sees the variant,
- * DecisionEvent is tracked immediately when decide() is called.
+ * Unlike ExposureEvent, which is tracked when the unit actually experiences
+ * its allocation, DecisionEvent is tracked immediately when decide() is called.
  */
 export interface DecisionEvent extends BaseEventFields {
   type: "decision";
@@ -639,11 +639,11 @@ export type AssignmentType = "decision" | "exposure";
 export interface AssignmentLogEntry {
   /** The unit key / entity identifier (e.g., user_id) */
   unitKey: string;
-  /** The policy (experiment) identifier — matches AssignmentColumnMapping.policyKey */
+  /** The policy identifier — matches AssignmentColumnMapping.policyKey */
   policyId: string;
   /** Stable key of the policy (for warehouse data matching) */
   policyKey?: string;
-  /** The allocation (variant) name — matches AssignmentColumnMapping.allocationKey */
+  /** The allocation name — matches AssignmentColumnMapping.allocationKey */
   allocationName: string;
   /** Stable key of the allocation (for warehouse data matching) */
   allocationKey?: string;
@@ -726,7 +726,7 @@ export interface TrafficalClientOptions {
    * This governs **resolution only**. Customer-supplied callbacks
    * (`assignmentLogger`, `eventLogger`, `onError`) are always contained and
    * never rethrow, in either mode — a delivery sink that fails must cost you a
-   * log row, never a variant.
+   * log row, never an allocation.
    */
   onResolutionError?: OnResolutionError;
   /**
@@ -759,7 +759,7 @@ export interface TrafficalClientOptions {
 
   /**
    * When true, assignment logger calls are deduplicated per session
-   * (same unit+policy+variant won't fire again). Default: true.
+   * (same unit+policy+allocation won't fire again). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
 

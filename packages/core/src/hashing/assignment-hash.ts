@@ -6,10 +6,10 @@
  * runtime must produce byte-identical results for the same inputs.
  *
  * Why SHA-256 over the previous FNV-1a:
- * - FNV-1a passed single-layer uniformity but FAILED cross-experiment
+ * - FNV-1a passed single-layer uniformity but FAILED cross-layer
  *   independence with realistic UUID/ULID unit keys and `lay_*` layer IDs:
  *   assignment in one layer could predict assignment in another, breaking
- *   orthogonal experiment assignment. SHA-256's avalanche behaviour removes
+ *   orthogonal layer assignment. SHA-256's avalanche behaviour removes
  *   that correlation.
  *
  * Contract:

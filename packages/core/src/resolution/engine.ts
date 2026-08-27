@@ -248,7 +248,7 @@ export function getUnitKeyField(bundle: ConfigBundle | null): string | null {
 /**
  * Returns the id of the layer a parameter belongs to, or null if the parameter
  * is not present in the bundle. Adapters use this to select the owning layer's
- * resolution metadata (variant, propensity, …) for a single flag, since a
+ * resolution metadata (allocation, propensity, …) for a single flag, since a
  * single-key decide() returns a LayerResolution for every matched layer
  * (siblings flagged `attributionOnly`), not just the flag's own layer.
  *
@@ -357,11 +357,11 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
   // Layers with matching parameters get their overrides applied (parameter
   // resolution). Layers WITHOUT matching parameters are still processed for
   // bucket/policy/allocation matching so that decision events and track-event
-  // attribution include the full set of experiments the user is assigned to.
+  // attribution include the full set of policies the user is assigned to.
   //
   // The `attributionOnly` flag distinguishes the two: layers resolved only for
   // attribution are marked `attributionOnly: true`, which tells trackExposure()
-  // to skip them (avoiding exposure inflation for experiments the user didn't
+  // to skip them (avoiding exposure inflation for policies the user didn't
   // actually see).
   for (const layer of bundle.layers) {
     const layerParams = paramsByLayer.get(layer.id);
@@ -431,7 +431,7 @@ function resolveInternal<T extends Record<string, ParameterValue>>(
       if (policy.state !== "running") continue;
 
       // Check bucket eligibility BEFORE conditions (performance optimization)
-      // This enables non-overlapping experiments within a layer
+      // This enables non-overlapping policies within a layer
       if (policy.eligibleBucketRange) {
         const { start, end } = policy.eligibleBucketRange;
         if (bucket < start || bucket > end) {

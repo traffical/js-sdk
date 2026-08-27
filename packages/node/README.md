@@ -83,7 +83,7 @@ const decision = await client.decide({
     'feature.enabled': true,
     'ui.theme': 'dark',
   },
-  exposures: [...]        // Which experiments the user is in
+  exposures: [...]        // Which policies the user is in
 }
 ```
 

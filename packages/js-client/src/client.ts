@@ -245,7 +245,7 @@ export interface TrafficalClientOptions {
 
   /**
    * When true, assignment logger calls are deduplicated per session
-   * (same unit+policy+variant won't fire again). Default: true.
+   * (same unit+policy+allocation won't fire again). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
 
@@ -807,7 +807,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
 
   /**
    * Tracks an exposure event.
-   * Automatically deduplicates exposures for the same user/variant.
+   * Automatically deduplicates exposure events for the same user/allocation.
    *
    * Skips layers marked `attributionOnly` — those were resolved for
    * attribution/assignment purposes only (no parameters were requested
@@ -1492,7 +1492,7 @@ export class TrafficalClient<TEvents extends TrackEventMap = TrackEventMap> {
    * - "cumulative": Collects layers from ALL cached decisions for this unit,
    *   deduplicated by layerId:policyId (last-write-wins). This ensures cross-page
    *   funnels (e.g., catalog -> PDP -> checkout) attribute correctly to all
-   *   experiments the user is exposed to. For per-entity dynamic allocation
+   *   policies the user is exposed to. For per-entity dynamic allocation
    *   policies, only the most recent allocation is kept to avoid attributing
    *   rewards to allocations from other entities (e.g., different products).
    *

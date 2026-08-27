@@ -82,7 +82,7 @@ export interface TrafficalProviderConfig {
 
   /**
    * Exposure deduplication session TTL in milliseconds (default: 30 minutes).
-   * Same user seeing same variant won't trigger multiple exposure events.
+   * Same user seeing the same allocation won't trigger multiple exposure events.
    */
   exposureSessionTtlMs?: number;
 

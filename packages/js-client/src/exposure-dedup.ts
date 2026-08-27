@@ -1,7 +1,7 @@
 /**
  * ExposureDeduplicator - Prevents duplicate exposure events.
  *
- * Same user seeing same variant should only count as 1 exposure.
+ * Same user seeing the same allocation should only count as 1 exposure.
  * Uses session-based deduplication with localStorage persistence.
  */
 

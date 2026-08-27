@@ -10,7 +10,7 @@
  * This ensures:
  * - Same user always gets same bucket for a given layer
  * - Different layers have independent bucketing (orthogonality) — SHA-256's
- *   avalanche behaviour passes cross-experiment independence where FNV-1a did not
+ *   avalanche behaviour passes cross-layer independence where FNV-1a did not
  * - Deterministic results across SDK and server
  */
 
@@ -85,7 +85,7 @@ export function percentageToBucketRange(
 }
 
 /**
- * Creates non-overlapping bucket ranges for multiple variants.
+ * Creates non-overlapping bucket ranges for multiple allocations.
  *
  * @param percentages - Array of percentages that should sum to <= 100
  * @param bucketCount - Total buckets

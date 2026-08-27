@@ -54,7 +54,7 @@ const enabled = await of.getBooleanValue("checkout.newFlow", false, ctx);
 const color = await of.getStringValue("ui.color", "blue", ctx);
 ```
 
-The resolution `variant`, `reason` (`SPLIT` when a variant was assigned, else `DEFAULT`), and scalar `traffical.*` `flagMetadata` (decision id, policy/allocation keys, bucket, propensity, config version) come straight from the decision.
+The resolution `variant`, `reason` (`SPLIT` when an allocation was assigned, else `DEFAULT`), and scalar `traffical.*` `flagMetadata` (decision id, policy/allocation keys, bucket, propensity, config version) come straight from the decision.
 
 ## Exposure — the `$traffical.exposure` convention
 

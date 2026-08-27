@@ -10,14 +10,14 @@ them from layers that actively resolved parameters.
 This fixes a bug where `decide()` with `defaults: {}` (or defaults that only
 matched a subset of layers) produced empty or incomplete
 `decision.metadata.layers`, causing downstream analytics and metric systems
-to lose track of which experiments the user was assigned to.
+to lose track of which policies the user was assigned to.
 
 ## The Problem
 
 The resolution engine previously coupled two concerns:
 
 1. **Parameter resolution** — "what value should `checkout.cta` have?"
-2. **Attribution / assignment** — "which experiment allocations is this user in?"
+2. **Attribution / assignment** — "which policy allocations is this user in?"
 
 Both were gated behind the same filter:
 
@@ -34,7 +34,7 @@ layers with matching parameters.
 ### Consequences
 
 - **Decision and exposure events** carried incomplete `layers` data, so
-  downstream systems couldn't determine which experiments the user was
+  downstream systems couldn't determine which policies the user was
   assigned to.
 
 - **Track-event attribution** derives from `decision.metadata.layers` via the
@@ -96,20 +96,21 @@ This change formally separates two concepts that were previously conflated:
 
 | Concept | What it means | When it fires | Used for |
 |---------|---------------|---------------|----------|
-| **Decision** (assignment) | User is bucketed into an allocation for this layer | Every `decide()` call, all layers | Intent-to-treat analysis, metric joins, attribution on track events |
-| **Exposure** | User actually saw the variant's parameters | Only for layers with requested parameters | Exposure-based analysis, per-protocol stats |
+| **Decision** (assignment) | The SDK resolved an allocation for this unit in this layer | Every `decide()` call, all layers | Intent-to-treat analysis, metric joins, attribution on track events |
+| **Exposure** | The unit actually experienced its allocation's parameters | Only for layers with requested parameters | Treatment-on-the-treated analysis, per-protocol stats |
 
 Attribution moves from being exposure-scoped to decision-scoped. This means:
 
 - `decision.metadata.layers` is now **exhaustive** — it includes all layers in
   the bundle, not just those with matching parameters.
 - Track-event `attribution` (built from cumulative layers) includes all
-  experiments the user is assigned to.
+  policies the user is assigned to.
 - Exposure events remain scoped to layers the component actually uses.
 
 **Nothing is lost.** Exposure events still provide the same granularity as
-before — you can always distinguish "user was assigned" (decision) from "user
-saw the variant" (exposure) using the event type and the `attributionOnly` flag.
+before — you can always distinguish "the unit was assigned an allocation"
+(decision) from "the unit actually experienced its allocation" (exposure) using
+the event type and the `attributionOnly` flag.
 
 ## Performance
 

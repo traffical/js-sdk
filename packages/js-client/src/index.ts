@@ -5,7 +5,7 @@
  *
  * Features:
  * - Error boundary wrapping (P0) - SDK errors never crash your app
- * - Exposure deduplication (P0) - Same user/variant = 1 exposure
+ * - Exposure deduplication (P0) - Same user/allocation = 1 exposure event
  * - Smart event batching (P1) - Batches events, uses sendBeacon on unload
  * - Plugin system (P2) - Extensible via plugins
  * - DOM binding plugin - Auto-apply parameters to DOM elements

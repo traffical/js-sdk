@@ -167,7 +167,7 @@ The Traffical DevTools debug plugin uses these methods to let developers force p
 ## Features
 
 - **Error Boundary** - SDK errors never crash your app
-- **Exposure Deduplication** - Same user/variant = 1 exposure per session
+- **Exposure Deduplication** - Same user/allocation = 1 exposure event per session
 - **Smart Batching** - Events batched and flushed efficiently
 - **Beacon on Unload** - Events sent reliably on page close
 - **Auto Stable ID** - Anonymous user identification via localStorage/cookie
@@ -218,7 +218,7 @@ The plugin:
 
 ### Redirect Plugin
 
-Run URL split tests (redirect experiments) where visitors are redirected to different landing page variants. The redirect plugin automatically triggers a decision on init, performs the redirect, and sets an attribution cookie. The attribution plugin ensures conversions on the variant page are attributed back to the experiment.
+Run URL split tests (redirect policies) where visitors are redirected to different landing page allocations. The redirect plugin automatically triggers a decision on init, performs the redirect, and sets an attribution cookie. The attribution plugin ensures conversions on the destination page are attributed back to the policy.
 
 ```typescript
 import {
@@ -242,7 +242,7 @@ const traffical = await createTrafficalClient({
 // On entry pages, it redirects. On other pages, it's a no-op.
 
 // Track goals as usual — the attribution plugin injects
-// redirect experiment metadata into every track() call.
+// redirect policy metadata into every track() call.
 traffical.track('add_to_cart', { value: 29.99 });
 ```
 
@@ -281,9 +281,9 @@ Track goal events from a separate GTM tag (e.g., triggered on "Add to Cart" clic
 
 1. **Init** — The redirect plugin's `onInitialize` hook receives the client and calls `decide()` automatically.
 
-2. **Entry page** — `onBeforeDecision` injects `url.pathname` into the context. The policy condition (e.g., `url.pathname startsWith /products/pillow`) matches, `redirect.url` resolves to the variant URL. `onDecision` writes an attribution cookie (`traffical_rdr`) and calls `window.location.replace()`.
+2. **Entry page** — `onBeforeDecision` injects `url.pathname` into the context. The policy condition (e.g., `url.pathname startsWith /products/pillow`) matches, `redirect.url` resolves to the allocation's URL. `onDecision` writes an attribution cookie (`traffical_rdr`) and calls `window.location.replace()`.
 
-3. **Variant page** — The SDK loads again, `decide()` runs, but the policy condition doesn't match the new URL, so `redirect.url` stays empty and no redirect happens. The redirect-attribution plugin reads the `traffical_rdr` cookie and injects the experiment metadata into every `track()` call.
+3. **Destination page** — The SDK loads again, `decide()` runs, but the policy condition doesn't match the new URL, so `redirect.url` stays empty and no redirect happens. The redirect-attribution plugin reads the `traffical_rdr` cookie and injects the policy metadata into every `track()` call.
 
 #### Configuration
 

@@ -13,7 +13,7 @@ import type { OFFlagType } from "./types.js";
  * A single-key `decide()` returns a `LayerResolution` for EVERY layer the unit
  * is bucketed into — the flag's layer plus every sibling (siblings flagged
  * `attributionOnly: true`). Positional `layers[0]` would attach the WRONG
- * experiment's variant/propensity/metadata, so we never index positionally.
+ * policy's allocation/propensity/metadata, so we never index positionally.
  *
  * - When `ownerLayerId` is known, return the layer whose `layerId` matches.
  * - When `ownerLayerId` is null, fall back to the SOLE non-`attributionOnly`
@@ -36,7 +36,7 @@ export function selectOwnerLayer(
 /**
  * Derives the OpenFeature `reason` from the owning layer.
  *
- * A present `allocationName` means the unit was assigned a variant by
+ * A present `allocationName` means the unit was assigned an allocation by
  * pseudorandom bucketing (static A/B) or bandit selection — both are
  * `SPLIT` per the OpenFeature spec. Absence → `DEFAULT`.
  */

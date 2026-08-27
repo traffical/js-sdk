@@ -298,7 +298,7 @@ That's it. Default tracking is enabled automatically, and `track` knows which de
 
 ### `useTraffical(options)`
 
-The primary hook for parameter resolution and experiment tracking.
+The primary hook for parameter resolution and event tracking.
 
 ```tsx
 const { params, decision, ready, error, trackExposure, track } = useTraffical({
@@ -347,7 +347,7 @@ function Dashboard() {
 
 ### 2. A/B Test with Conversion Tracking
 
-Test different variants and measure which performs better.
+Test different allocations and measure which performs better.
 
 ```tsx
 function PricingPage() {
@@ -484,7 +484,7 @@ function ProductDetails({ productId, defaultPrice }: Props) {
 
 ### 6. Component with Self-Contained Parameters
 
-Reusable component that owns its experiment surface.
+Reusable component that owns its parameter surface.
 
 ```tsx
 function CheckoutButton({ onCheckout }: { onCheckout: () => void }) {
@@ -712,12 +712,12 @@ function ConnectedPricingSection() {
 ### 1. Always Provide Sensible Defaults
 
 Defaults are used when:
-- No experiment is running
+- No policy is running
 - User doesn't match targeting conditions
 - SDK is still loading
 
 ```tsx
-// ✅ Good: Works without any experiment
+// ✅ Good: Works without any policy
 const { params } = useTraffical({
   defaults: {
     "pricing.discount": 0,
@@ -725,7 +725,7 @@ const { params } = useTraffical({
   },
 });
 
-// ❌ Bad: Undefined behavior without experiment
+// ❌ Bad: Undefined behavior without a policy
 const { params } = useTraffical({
   defaults: {
     "pricing.discount": undefined,  // What does this mean?
@@ -754,7 +754,7 @@ const discount = useTraffical({ defaults: { "pricing.discount": 0 } });
 
 ### 3. Track Events at Conversion Points
 
-Events enable Traffical to learn which variants perform best. Use the bound `track` from `useTraffical()` — it automatically includes the `decisionId`.
+Events enable Traffical to learn which allocations perform best. Use the bound `track` from `useTraffical()` — it automatically includes the `decisionId`.
 
 ```tsx
 const { params, track } = useTraffical({
@@ -801,9 +801,9 @@ category.subcategory.name
 
 feature.*     → Feature flags        (boolean)
 ui.*          → Visual variations    (string, number)
-pricing.*     → Pricing experiments  (number)
+pricing.*     → Pricing policies     (number)
 copy.*        → Copywriting tests    (string)
-experiment.*  → Explicit variants    (string)
+experiment.*  → Explicit allocations (string)
 ```
 
 ### 5. Handle Loading State
@@ -828,7 +828,7 @@ return <Hero variant={params["ui.heroVariant"]} />;
 
 ## Flicker-Free SSR (Next.js App Router)
 
-The classic A/B testing problem: users briefly see the default content before it switches to their assigned variant. This section shows how to eliminate that flicker entirely.
+The classic A/B testing problem: users briefly see the default content before it switches to their assigned allocation. This section shows how to eliminate that flicker entirely.
 
 ### The Problem
 
@@ -989,7 +989,7 @@ Request Flow (First Visit):
 3. Server layout reads userId from HEADER
 4. Server passes userId to React via props
 5. useTraffical's useState resolves from localConfig + userId
-6. Server renders HTML with CORRECT variant
+6. Server renders HTML with CORRECT allocation
 7. Response sent with Set-Cookie header
 8. Client hydrates with SAME userId → NO FLICKER ✅
 ─────────────────────────────────────────────────────────────────
@@ -1013,7 +1013,7 @@ Subsequent Requests:
 
 ### What This Solves
 
-- ✅ **First page load** - No flicker, correct variant from the start
+- ✅ **First page load** - No flicker, correct allocation from the start
 - ✅ **Client-side navigation** - Already worked (bundle cached)
 - ✅ **Page refresh** - UserId persisted in cookie
 - ✅ **New users** - UserId generated on first request
@@ -1028,7 +1028,7 @@ No. The SDK fetches the config bundle once and caches it. All resolution happens
 
 **Q: What happens if the SDK fails to load?**
 
-Defaults are returned. Your app works normally, just without experiment variations.
+Defaults are returned. Your app works normally, just without experimentation.
 
 **Q: Should I use `tracking: "none"` for SSR?**
 

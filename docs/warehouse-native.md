@@ -1,6 +1,6 @@
 # Warehouse-Native Experimentation
 
-Traffical supports **warehouse-native metrics** — compute experiment results directly from assignments and facts that live in your data warehouse. The SDK plays a key role by logging which users were assigned to which experiment variants.
+Traffical supports **warehouse-native metrics** — compute measurement results directly from assignments and facts that live in your data warehouse. The SDK plays a key role by logging which users were assigned to which policy allocations.
 
 There are two ways to get assignment data into your warehouse:
 
@@ -59,10 +59,10 @@ const client = new TrafficalClient({
 | Field | Description |
 |-------|-------------|
 | `unitKey` | The user/entity identifier used for bucketing |
-| `policyId` | The experiment (policy) identifier |
-| `policyKey` | Stable experiment key — use this for warehouse joins |
-| `allocationName` | The variant the user was assigned to |
-| `allocationKey` | Stable variant key — use this for warehouse joins |
+| `policyId` | The policy identifier |
+| `policyKey` | Stable policy key — use this for warehouse joins |
+| `allocationName` | The allocation the user was assigned to |
+| `allocationKey` | Stable allocation key — use this for warehouse joins |
 | `timestamp` | ISO 8601 assignment time |
 | `layerId` | Layer identifier |
 | `orgId`, `projectId`, `env` | Scoping fields |
@@ -82,7 +82,7 @@ While `assignmentLogger` emits structured **assignment rows**, the `eventLogger`
 callback receives the **full SDK events** — `exposure`, `track`, and `decision`
 — mirroring what would otherwise be sent to the Traffical edge. Use it when you
 want to route *all* product analytics (e.g. `add_to_cart`, `purchase`) plus
-experiment exposures into your own pipeline.
+policy exposure events into your own pipeline.
 
 ```ts
 import type { TrackableEvent } from "@traffical/core";
@@ -271,7 +271,7 @@ A common production pattern combines both pieces:
 
 - **Assignments** — BYO logger → CDP → warehouse table.
 - **Facts** — Tables already in your warehouse (orders, subscriptions, page views).
-- **Metrics** — Traffical joins assignments to facts and computes experiment results.
+- **Metrics** — Traffical joins assignments to facts and computes measurement results.
 
 If revenue data already exists in your warehouse, there's no need to call `track()` for purchases from the SDK. Define fact tables in the Traffical dashboard and attach metrics to them.
 
@@ -302,7 +302,7 @@ Assignment logger deduplication and cloud exposure deduplication are **independe
 
 ## When does `assignmentLogger` fire?
 
-- **`decide()`** — after resolving parameters, the logger fires once per layer that has a matched experiment and variant, with `type: "decision"` (subject to dedup).
+- **`decide()`** — after resolving parameters, the logger fires once per layer that has a matched policy and allocation, with `type: "decision"` (subject to dedup).
 - **`trackExposure()`** — also fires the logger for each matched layer, with `type: "exposure"`. Because `type` is part of the dedup key, calling both `decide()` and `trackExposure()` for the same decision produces two distinct rows (one `"decision"`, one `"exposure"`), while repeated calls of the same kind are deduplicated.
 
 The logger is **not** called when `unitKey` is missing from the decision metadata.

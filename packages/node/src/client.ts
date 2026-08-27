@@ -188,7 +188,7 @@ export interface TrafficalClientOptions extends CoreClientOptions {
 
   /**
    * When true, assignment logger calls are deduplicated via in-memory LRU
-   * (same unit+policy+variant won't fire again within TTL). Default: true.
+   * (same unit+policy+allocation won't fire again within TTL). Default: true.
    */
   deduplicateAssignmentLogger?: boolean;
 

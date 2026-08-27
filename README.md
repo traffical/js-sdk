@@ -216,7 +216,7 @@ the [React Native README](./packages/react-native/README.md) for the full note.
 
 ### Warehouse-Native Assignment Logging
 
-For teams with their own data warehouse, the SDK can log experiment assignments to your analytics pipeline for warehouse-native metric computation:
+For teams with their own data warehouse, the SDK can log policy assignments to your analytics pipeline for warehouse-native metric computation:
 
 ```typescript
 import { createWarehouseNativeLoggerPlugin } from '@traffical/js-client';
@@ -267,9 +267,9 @@ client.clearOverrides();
 client.onOverridesChange((overrides) => { /* react to changes */ });
 ```
 
-### Redirect Experiments
+### Redirect Policies
 
-URL split testing and redirect experiments with cookie-based attribution:
+URL split testing and redirect policies with cookie-based attribution:
 
 ```typescript
 import { createRedirectPlugin } from '@traffical/js-client';

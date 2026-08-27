@@ -17,7 +17,7 @@
  * Statsig, Eppo, GrowthBook — guards the customer's logging callback narrowly
  * and unconditionally, and Eppo does so even when the integrator has explicitly
  * asked for strict mode. A delivery sink that throws must cost you a log row,
- * never a variant: letting it fall back to defaults puts a load-correlated
+ * never an allocation: letting it fall back to defaults puts a load-correlated
  * confound straight into the treatment assignment, because bounded queues throw
  * precisely when traffic spikes.
  */

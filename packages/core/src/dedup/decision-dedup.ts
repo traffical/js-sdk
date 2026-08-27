@@ -7,7 +7,7 @@
  *
  * Key differences from ExposureDeduplicator:
  * - Pure in-memory (no I/O, no storage dependency)
- * - Deduplicates on unitKey + assignment hash (not policy/variant)
+ * - Deduplicates on unitKey + assignment hash (not policy/allocation)
  * - Suitable for use in any JavaScript environment
  */
 

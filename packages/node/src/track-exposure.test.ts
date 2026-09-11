@@ -1,6 +1,6 @@
 /**
  * Tests for the Node SDK exposure path (enh #3 — parity with the browser SDK):
- * - trackExposure() skips `attributionOnly` layers (experiments the user was
+ * - trackExposure() skips `attributionOnly` layers (policies the user was
  *   assigned to for attribution but not actually shown).
  * - trackExposure() deduplicates per (unit, policy, allocation) within a session.
  * - getUnitKeyField() / getParameterLayerId() read the loaded bundle.

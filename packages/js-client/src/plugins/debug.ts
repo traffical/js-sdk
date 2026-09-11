@@ -31,6 +31,7 @@
 
 import type {
   ConfigBundle,
+  Context,
   DecisionResult,
   ExposureEvent,
   TrackEvent,
@@ -69,6 +70,18 @@ export interface DebugState {
   lastDecisionId: string | null;
   /** Parameter overrides currently applied by the debug plugin. */
   overrides: Record<string, unknown>;
+  /**
+   * Context attributes the debug plugin merges into every decision's context
+   * (on top of whatever the host app passes). Lets an inspector satisfy
+   * targeting conditions the app itself never sets, e.g. `testMode exists`.
+   */
+  contextOverrides: Record<string, unknown>;
+  /**
+   * The context of the last real decision, as the app passed it (after the
+   * client's unit-key enrichment, before context overrides). `null` until the
+   * app has decided at least once.
+   */
+  lastContext: Record<string, unknown> | null;
 }
 
 export interface TrafficalDebugInstance {
@@ -89,6 +102,18 @@ export interface TrafficalDebugInstance {
   clearOverride(key: string): void;
   clearAllOverrides(): void;
   getOverrides(): Record<string, unknown>;
+  /**
+   * Replace the context attributes merged into every decision. Re-decides
+   * immediately. Pass `{}` to clear.
+   */
+  setContextOverrides(context: Record<string, unknown>): void;
+  getContextOverrides(): Record<string, unknown>;
+  /**
+   * Re-run the app's last decision (same context and parameter set) so the
+   * inspector shows what the app would resolve right now. If the page uses
+   * the OpenFeature provider, the OpenFeature context is re-set so hooks
+   * bound to `PROVIDER_CONTEXT_CHANGED` re-render too.
+   */
   reDecide(): void;
   refresh(): Promise<void>;
 }
@@ -161,6 +186,31 @@ function emitRegistryEvent(event: RegistryEvent): void {
 // ---------------------------------------------------------------------------
 
 let _idCounter = 0;
+
+/**
+ * The OpenFeature web SDK stores its API singleton on globalThis under a
+ * well-known symbol. Nudging its context makes `@traffical/openfeature-web`
+ * re-resolve every flag (through this client's `decide`, and therefore
+ * through the debug plugin's `onBeforeDecision`) and emit
+ * `PROVIDER_CONTEXT_CHANGED`, which is what host-app hooks re-render on.
+ */
+const OPENFEATURE_API_SYMBOL = Symbol.for("@openfeature/web-sdk/api");
+
+interface OpenFeatureApiLike {
+  getContext(domain?: string): Record<string, unknown>;
+  setContext(context: Record<string, unknown>): Promise<void>;
+}
+
+function getOpenFeatureApi(): OpenFeatureApiLike | null {
+  const api = (globalThis as Record<symbol, unknown>)[OPENFEATURE_API_SYMBOL] as
+    | Partial<OpenFeatureApiLike>
+    | undefined;
+  if (api && typeof api.getContext === "function" && typeof api.setContext === "function") {
+    return api as OpenFeatureApiLike;
+  }
+  return null;
+}
+
 function generateId(): string {
   return `traffical_${Date.now().toString(36)}_${(++_idCounter).toString(36)}`;
 }
@@ -188,6 +238,9 @@ export function createDebugPlugin(
   let _layers: LayerResolution[] = [];
   let _lastDecisionId: string | null = null;
   let _effectiveUnitKey: string | null = null;
+  let _contextOverrides: Record<string, unknown> = {};
+  let _lastContext: Context | null = null;
+  let _lastDefaults: Record<string, ParameterValue> | null = null;
   const _events: DebugEvent[] = [];
   let _stateListeners: Array<(state: DebugState) => void> = [];
   let _eventListeners: Array<(event: DebugEvent) => void> = [];
@@ -202,6 +255,8 @@ export function createDebugPlugin(
       layers: [..._layers],
       lastDecisionId: _lastDecisionId,
       overrides: _client?.getOverrides?.() ?? {},
+      contextOverrides: { ..._contextOverrides },
+      lastContext: _lastContext ? { ..._lastContext } : null,
     };
   }
 
@@ -237,9 +292,30 @@ export function createDebugPlugin(
   }
 
   function triggerReDecide(): void {
-    if (_client) {
+    if (!_client) return;
+
+    // Replay the app's last real decision. Unknown parameter keys keep the
+    // values we pass; known ones are re-resolved from the bundle, so the
+    // previous assignments are a faithful stand-in for the app's defaults.
+    // Before the app has decided once there is nothing to replay: an empty
+    // decision still refreshes layer/bucket info without resolving params.
+    try {
+      _client.decide({
+        context: _lastContext ? { ..._lastContext } : {},
+        defaults: _lastDefaults ? { ..._lastDefaults } : {},
+      });
+    } catch {
+      // Best-effort
+    }
+
+    // OpenFeature-hosted apps resolve through the provider's bound context,
+    // not through the decision above. Re-setting the same context forces the
+    // provider to clear its memo and re-resolve, and fires
+    // PROVIDER_CONTEXT_CHANGED so the app's hooks pick up the new values.
+    const openFeature = getOpenFeatureApi();
+    if (openFeature) {
       try {
-        _client.decide({ context: {}, defaults: {} });
+        void openFeature.setContext({ ...openFeature.getContext() }).catch(() => {});
       } catch {
         // Best-effort
       }
@@ -321,6 +397,16 @@ export function createDebugPlugin(
       return _client?.getOverrides?.() ?? {};
     },
 
+    setContextOverrides(context: Record<string, unknown>): void {
+      _contextOverrides = { ...context };
+      notifyStateListeners();
+      triggerReDecide();
+    },
+
+    getContextOverrides(): Record<string, unknown> {
+      return { ..._contextOverrides };
+    },
+
     reDecide(): void {
       triggerReDecide();
     },
@@ -364,7 +450,14 @@ export function createDebugPlugin(
       notifyStateListeners();
     },
 
+    onBeforeDecision(context: Context): Context | void {
+      _lastContext = { ...context };
+      if (Object.keys(_contextOverrides).length === 0) return;
+      return { ...context, ..._contextOverrides } as Context;
+    },
+
     onDecision(decision: DecisionResult): void {
+      _lastDefaults = { ...decision.assignments };
       _assignments = { ...decision.assignments };
       _layers = decision.metadata?.layers ? [...decision.metadata.layers] : [];
       _lastDecisionId = decision.decisionId;
@@ -402,6 +495,9 @@ export function createDebugPlugin(
       }
       _stateListeners = [];
       _eventListeners = [];
+      _contextOverrides = {};
+      _lastContext = null;
+      _lastDefaults = null;
       _client = null;
     },
   };

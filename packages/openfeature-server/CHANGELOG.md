@@ -1,5 +1,12 @@
 # @traffical/openfeature-server
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [e92089d]
+  - @traffical/node@0.12.1
+
 ## 0.2.5
 
 ### Patch Changes

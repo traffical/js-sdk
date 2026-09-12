@@ -35,7 +35,28 @@ mock.module("react-native", () => ({
   },
 }));
 
-const { createDefaultDeviceInfoProvider, defaultDeviceInfoProvider } = await import("../device-info.js");
+const { createDefaultDeviceInfoProvider } = await import("../device-info.js");
+
+// Inject the fakes explicitly: `mock.module` cannot rewire a namespace
+// binding another suite already loaded, and test-file order differs in CI.
+const platform = {
+  get OS() {
+    return rn.OS;
+  },
+  get Version() {
+    return rn.Version;
+  },
+  get isPad() {
+    return rn.isPad;
+  },
+  get constants() {
+    return rn.constants;
+  },
+};
+const dimensions = { get: (_which: "window" | "screen") => rn.window };
+const defaultDeviceInfoProvider = createDefaultDeviceInfoProvider({ platform, dimensions });
+const createProvider = (opts: { appVersion?: string; appBuildNumber?: string } = {}) =>
+  createDefaultDeviceInfoProvider({ ...opts, platform, dimensions });
 
 const DOLLAR_KEYS = ["$os", "$os_version", "$app_version", "$locale", "$timezone", "$device_model", "$device_type"];
 
@@ -108,7 +129,7 @@ describe("defaultDeviceInfoProvider (react-native)", () => {
   });
 
   it("createDefaultDeviceInfoProvider carries a caller-supplied app version", () => {
-    const provider = createDefaultDeviceInfoProvider({ appVersion: "2.3.1", appBuildNumber: "451" });
+    const provider = createProvider({ appVersion: "2.3.1", appBuildNumber: "451" });
     const info = provider.getDeviceInfo();
     expect(info.$app_version).toBe("2.3.1");
     expect(info.appVersion).toBe("2.3.1");
@@ -118,13 +139,13 @@ describe("defaultDeviceInfoProvider (react-native)", () => {
   it("every $ key it emits is in the canonical set and no other $ key leaks", () => {
     rn.OS = "android";
     rn.constants = { Model: "SM-X910" };
-    const info = createDefaultDeviceInfoProvider({ appVersion: "1.0.0" }).getDeviceInfo();
+    const info = createProvider({ appVersion: "1.0.0" }).getDeviceInfo();
     const dollar = Object.keys(info).filter((k) => k.startsWith("$"));
     expect(dollar.sort()).toEqual([...DOLLAR_KEYS].sort());
   });
 
   it("re-reads primitives on every call", () => {
-    const provider = createDefaultDeviceInfoProvider();
+    const provider = createProvider();
     expect(provider.getDeviceInfo().screenWidth).toBe(390);
     rn.window = { width: 844, height: 390, scale: 3 };
     expect(provider.getDeviceInfo().screenWidth).toBe(844);

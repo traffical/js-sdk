@@ -3,8 +3,18 @@
 // detection does not see every member (CI failed on `Dimensions` with RN 0.84).
 import * as RN from "react-native";
 
-const Platform = () => RN.Platform;
-const Dimensions = () => RN.Dimensions;
+/** The subset of react-native's `Platform` the default provider reads. */
+export interface PlatformLike {
+  OS: string;
+  Version?: string | number;
+  isPad?: boolean;
+  constants?: Record<string, unknown>;
+}
+
+/** The subset of react-native's `Dimensions` the default provider reads. */
+export interface DimensionsLike {
+  get(which: "window" | "screen"): { width: number; height: number; scale?: number };
+}
 
 /**
  * Device metadata merged into every decision context by `TrafficalRNProvider`
@@ -54,6 +64,10 @@ export interface DefaultDeviceInfoOptions {
   appVersion?: string;
   /** App build number, same caveat as `appVersion`. */
   appBuildNumber?: string;
+  /** Override react-native's `Platform` (tests, custom hosts). */
+  platform?: PlatformLike;
+  /** Override react-native's `Dimensions` (tests, custom hosts). */
+  dimensions?: DimensionsLike;
 }
 
 function mapOS(os: string): NonNullable<DeviceInfo["$os"]> {
@@ -68,11 +82,15 @@ function mapOS(os: string): NonNullable<DeviceInfo["$os"]> {
   }
 }
 
-function deviceType(os: string, width: number, height: number): NonNullable<DeviceInfo["$device_type"]> {
+function deviceType(
+  platform: PlatformLike,
+  os: string,
+  width: number,
+  height: number,
+): NonNullable<DeviceInfo["$device_type"]> {
   if (os === "ios") {
     // `Platform.isPad` is only defined on iOS builds of RN.
-    const isPad = (Platform() as unknown as { isPad?: boolean }).isPad === true;
-    return isPad ? "tablet" : "mobile";
+    return platform.isPad === true ? "tablet" : "mobile";
   }
   if (os === "android") {
     // Android convention: a 600dp shortest side is the phone/tablet boundary.
@@ -85,8 +103,8 @@ function deviceType(os: string, width: number, height: number): NonNullable<Devi
   return "desktop";
 }
 
-function androidModel(): string | undefined {
-  const constants = (Platform() as unknown as { constants?: Record<string, unknown> }).constants;
+function androidModel(platform: PlatformLike): string | undefined {
+  const constants = platform.constants;
   const model = constants?.Model;
   return typeof model === "string" && model ? model : undefined;
 }
@@ -105,6 +123,9 @@ function androidModel(): string | undefined {
  * ```
  */
 export function createDefaultDeviceInfoProvider(options: DefaultDeviceInfoOptions = {}): DeviceInfoProvider {
+  // Resolved per call so a host that installs/mocks react-native late still wins.
+  const Platform = (): PlatformLike => options.platform ?? (RN.Platform as unknown as PlatformLike);
+  const Dimensions = (): DimensionsLike => options.dimensions ?? (RN.Dimensions as unknown as DimensionsLike);
   return {
     getDeviceInfo(): DeviceInfo {
       const info: DeviceInfo = {};
@@ -138,9 +159,9 @@ export function createDefaultDeviceInfoProvider(options: DefaultDeviceInfoOption
       } catch {
         // Dimensions unavailable (headless / test)
       }
-      info.$device_type = deviceType(os, width, height);
+      info.$device_type = deviceType(Platform(), os, width, height);
 
-      const model = os === "android" ? androidModel() : undefined;
+      const model = os === "android" ? androidModel(Platform()) : undefined;
       if (model) {
         info.deviceModel = model;
         info.$device_model = model;

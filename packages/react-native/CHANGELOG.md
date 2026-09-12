@@ -1,5 +1,18 @@
 # @traffical/react-native
 
+## 0.9.0
+
+### Minor Changes
+
+- 5a7710b: Add `defaultDeviceInfoProvider` / `createDefaultDeviceInfoProvider(options)` — a `DeviceInfoProvider` built from `Platform`, `Dimensions` and `Intl` only (no native modules). Emits the canonical `$`-prefixed system attributes shared by every Traffical SDK (`$os`, `$os_version`, `$device_type`, `$device_model` on Android, `$locale`, `$timezone`, and `$app_version` when supplied via `createDefaultDeviceInfoProvider({ appVersion })`) alongside the existing un-prefixed `DeviceInfo` fields. Opt-in: pass it as `config.deviceInfoProvider`; apps that do not are unaffected. The `DeviceInfo` interface gains the optional `$` fields so custom providers can emit them too.
+
+### Patch Changes
+
+- Updated dependencies [5a7710b]
+- Updated dependencies [5a7710b]
+  - @traffical/js-client@0.19.0
+  - @traffical/core@0.12.1
+
 ## 0.8.4
 
 ### Patch Changes

@@ -1,12 +1,12 @@
 /**
  * Portable loader for @traffical/sdk-spec conformance fixtures.
  *
- * `@traffical/sdk-spec@0.8.0` is published and pinned in this package's
+ * `@traffical/sdk-spec@0.9.0` is published and pinned in this package's
  * devDependencies, so it is the authoritative source. `loadSpecFixture()`
  * resolves each fixture from the first available source, in order:
  *
  *   1. The installed `@traffical/sdk-spec` package — but ONLY when it is already
- *      at >= 0.8.0 (so a stale 0.7.0 pin never shadows a changed fixture).
+ *      at >= 0.9.0 (so a stale 0.7.0 pin never shadows a changed fixture).
  *   2. The local sibling `sdk-spec` checkout on the drift-remediation branch
  *      (dev + local CI), discovered by walking up from this file.
  *   3. The installed package's fixtures dir as a last resort (older fixtures
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 /** Minimum spec version whose published fixtures match this SDK's expectations. */
-const MIN_SPEC_VERSION = [0, 8, 0] as const;
+const MIN_SPEC_VERSION = [0, 9, 0] as const;
 
 function parseSemverMajorMinorPatch(v: string): [number, number, number] | null {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(v);

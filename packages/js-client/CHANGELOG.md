@@ -1,5 +1,17 @@
 # @traffical/js-client
 
+## 0.19.0
+
+### Minor Changes
+
+- 5a7710b: Add `autoAttributesPlugin()` — opt-in auto-collected web attributes. Injects `$`-prefixed context keys on every decision via `onBeforeDecision`: `$browser`, `$os`, `$device_type` (small internal UA matcher, no dependency; device type falls back to `(pointer: coarse)` + width), `$url`, `$host`, `$path`, `$query`, `$referrer`, `$page_title`, `$utm_source` / `$utm_medium` / `$utm_campaign` / `$utm_term` / `$utm_content` (persisted in `sessionStorage` under `traffical:utm` and re-read when the current URL has none; `persistUtm: false` disables), `$locale`, `$timezone`. Caller-supplied context always wins; keys that cannot be derived are omitted; re-derived on every decision so SPA navigation is covered; SSR-safe passthrough without `window`. Options `include` / `exclude` narrow the key set. Exports `AUTO_ATTRIBUTE_KEYS`, `AutoAttributeKey`, and the `createAutoAttributesPlugin` alias; also available on the CDN global as `Traffical.autoAttributesPlugin`. The dashboard registers these keys as system attributes.
+
+### Patch Changes
+
+- Updated dependencies [5a7710b]
+  - @traffical/core@0.12.1
+  - @traffical/core-io@0.7.2
+
 ## 0.18.0
 
 ### Minor Changes

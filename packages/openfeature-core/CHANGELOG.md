@@ -1,5 +1,12 @@
 # @traffical/openfeature-core
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [5a7710b]
+  - @traffical/core@0.12.1
+
 ## 0.2.5
 
 ### Patch Changes

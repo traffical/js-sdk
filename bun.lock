@@ -27,7 +27,7 @@
       "name": "@traffical/core-io",
       "version": "0.7.1",
       "dependencies": {
-        "@traffical/core": "0.10.0",
+        "@traffical/core": "0.12.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -38,8 +38,8 @@
       "name": "@traffical/js-client",
       "version": "0.18.0",
       "dependencies": {
-        "@traffical/core": "0.10.0",
-        "@traffical/core-io": "0.6.0",
+        "@traffical/core": "0.12.0",
+        "@traffical/core-io": "0.7.1",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -51,8 +51,8 @@
       "name": "@traffical/node",
       "version": "0.12.1",
       "dependencies": {
-        "@traffical/core": "0.10.0",
-        "@traffical/core-io": "0.6.0",
+        "@traffical/core": "0.12.0",
+        "@traffical/core-io": "0.7.1",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -63,7 +63,7 @@
       "name": "@traffical/openfeature-core",
       "version": "0.2.5",
       "dependencies": {
-        "@traffical/core": "0.10.0",
+        "@traffical/core": "0.12.0",
       },
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
@@ -78,14 +78,14 @@
       "name": "@traffical/openfeature-server",
       "version": "0.2.6",
       "dependencies": {
-        "@traffical/core": "0.10.0",
-        "@traffical/node": "0.9.0",
-        "@traffical/openfeature-core": "0.1.0",
+        "@traffical/core": "0.12.0",
+        "@traffical/node": "0.12.1",
+        "@traffical/openfeature-core": "0.2.5",
       },
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
         "@openfeature/server-sdk": "^1.22.0",
-        "@traffical/sdk-spec": "^0.8.0",
+        "@traffical/sdk-spec": "^0.9.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -97,14 +97,14 @@
       "name": "@traffical/openfeature-web",
       "version": "0.2.6",
       "dependencies": {
-        "@traffical/core": "0.10.0",
-        "@traffical/js-client": "0.15.0",
-        "@traffical/openfeature-core": "0.1.0",
+        "@traffical/core": "0.12.0",
+        "@traffical/js-client": "0.18.0",
+        "@traffical/openfeature-core": "0.2.5",
       },
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
         "@openfeature/web-sdk": "^1.9.0",
-        "@traffical/sdk-spec": "^0.8.0",
+        "@traffical/sdk-spec": "^0.9.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -1064,22 +1064,6 @@
 
     "@testing-library/dom/pretty-format": ["pretty-format@27.5.1", "", { "dependencies": { "ansi-regex": "^5.0.1", "ansi-styles": "^5.0.0", "react-is": "^17.0.1" } }, "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ=="],
 
-    "@traffical/core-io/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
-    "@traffical/js-client/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
-    "@traffical/node/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
-    "@traffical/openfeature-core/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
-    "@traffical/openfeature-server/@traffical/sdk-spec": ["@traffical/sdk-spec@0.8.0", "", {}, "sha512-TakZHrqaq3KgCu10O8cjn8IiaN3apeAB3hSlu/aDfb9ljEIEfbAFcdFqZjvTBM+gSn30enXwTnZBTxz1PxDJvw=="],
-
-    "@traffical/openfeature-server/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
-    "@traffical/openfeature-web/@traffical/sdk-spec": ["@traffical/sdk-spec@0.8.0", "", {}, "sha512-TakZHrqaq3KgCu10O8cjn8IiaN3apeAB3hSlu/aDfb9ljEIEfbAFcdFqZjvTBM+gSn30enXwTnZBTxz1PxDJvw=="],
-
-    "@traffical/openfeature-web/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
-
     "@traffical/react/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
     "@traffical/react-native/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
@@ -1137,18 +1121,6 @@
     "@istanbuljs/load-nyc-config/js-yaml/argparse": ["argparse@1.0.10", "", { "dependencies": { "sprintf-js": "~1.0.2" } }, "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg=="],
 
     "@testing-library/dom/pretty-format/react-is": ["react-is@17.0.2", "", {}, "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w=="],
-
-    "@traffical/core-io/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@traffical/js-client/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@traffical/node/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@traffical/openfeature-core/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@traffical/openfeature-server/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@traffical/openfeature-web/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "@traffical/react-native/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 

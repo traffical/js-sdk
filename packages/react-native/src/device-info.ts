@@ -1,4 +1,10 @@
-import { Platform, Dimensions } from "react-native";
+// Namespace import with lazy property access: react-native's entry is a
+// CommonJS module with getter-based exports, and bun's static named-export
+// detection does not see every member (CI failed on `Dimensions` with RN 0.84).
+import * as RN from "react-native";
+
+const Platform = () => RN.Platform;
+const Dimensions = () => RN.Dimensions;
 
 /**
  * Device metadata merged into every decision context by `TrafficalRNProvider`
@@ -65,7 +71,7 @@ function mapOS(os: string): NonNullable<DeviceInfo["$os"]> {
 function deviceType(os: string, width: number, height: number): NonNullable<DeviceInfo["$device_type"]> {
   if (os === "ios") {
     // `Platform.isPad` is only defined on iOS builds of RN.
-    const isPad = (Platform as unknown as { isPad?: boolean }).isPad === true;
+    const isPad = (Platform() as unknown as { isPad?: boolean }).isPad === true;
     return isPad ? "tablet" : "mobile";
   }
   if (os === "android") {
@@ -80,7 +86,7 @@ function deviceType(os: string, width: number, height: number): NonNullable<Devi
 }
 
 function androidModel(): string | undefined {
-  const constants = (Platform as unknown as { constants?: Record<string, unknown> }).constants;
+  const constants = (Platform() as unknown as { constants?: Record<string, unknown> }).constants;
   const model = constants?.Model;
   return typeof model === "string" && model ? model : undefined;
 }
@@ -102,12 +108,12 @@ export function createDefaultDeviceInfoProvider(options: DefaultDeviceInfoOption
   return {
     getDeviceInfo(): DeviceInfo {
       const info: DeviceInfo = {};
-      const os = String(Platform.OS);
+      const os = String(Platform().OS);
 
       info.osName = os;
       info.$os = mapOS(os);
 
-      const version = Platform.Version;
+      const version = Platform().Version;
       if (version !== undefined && version !== null) {
         const v = String(version);
         info.osVersion = v;
@@ -123,7 +129,7 @@ export function createDefaultDeviceInfoProvider(options: DefaultDeviceInfoOption
       let width = 0;
       let height = 0;
       try {
-        const win = Dimensions.get("window");
+        const win = Dimensions().get("window");
         width = win.width;
         height = win.height;
         info.screenWidth = width;

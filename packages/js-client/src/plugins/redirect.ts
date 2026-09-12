@@ -43,6 +43,15 @@ export function createRedirectPlugin(
       });
     },
 
+    /**
+     * Injects the current pathname under the literal, flat key
+     * `"url.pathname"` (one property whose name contains a dot — NOT a nested
+     * `{ url: { pathname } }` object). The evaluator resolves a condition
+     * field flat-key-first, then by dot-path traversal (sdk-spec "Field
+     * lookup"), so a policy condition on `url.pathname` matches this key
+     * directly and would equally match a nested shape supplied by the caller.
+     * Caller-supplied context wins over the injected key.
+     */
     onBeforeDecision(context: Context): Context {
       if (typeof window === "undefined") return context;
       return {

@@ -280,6 +280,21 @@ const client = createTrafficalClient({
 });
 ```
 
+### Auto Attributes
+
+Opt-in `$`-prefixed browser/page/UTM/locale context (`$browser`, `$os`, `$device_type`, `$path`, `$utm_source`, …), injected into every decision and registered as system attributes in the dashboard:
+
+```typescript
+import { autoAttributesPlugin } from '@traffical/js-client';
+
+const client = createTrafficalClient({
+  apiKey: 'traffical_pk_…',
+  plugins: [autoAttributesPlugin({ exclude: ['$page_title'] })],
+});
+```
+
+See the [js-client README](packages/js-client#auto-attributes-plugin) for the full key table.
+
 ### Plugin Architecture
 
 Extend SDK behavior with plugins — attach at init or late via `client.use()`:

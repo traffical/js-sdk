@@ -310,6 +310,62 @@ The redirect plugin automatically adds these context fields:
 
 Use `url.pathname` in policy conditions to target specific pages.
 
+### Auto Attributes Plugin
+
+Opt-in plugin that derives browser, page, UTM and locale attributes and injects them into every decision context via `onBeforeDecision` (the same hook the redirect plugin uses). All keys live in the reserved `$` namespace so they never collide with your own context keys. The dashboard registers them as **system attributes** (`managedBy: system`, source `plugin:web`), so they appear in the condition editor's key picker as soon as the plugin is in use.
+
+```typescript
+import { createTrafficalClient, autoAttributesPlugin } from '@traffical/js-client';
+
+const traffical = await createTrafficalClient({
+  orgId: 'org_xxx',
+  projectId: 'proj_xxx',
+  env: 'production',
+  apiKey: 'traffical_pk_…',
+  plugins: [autoAttributesPlugin()],
+});
+```
+
+Via the CDN build: `Traffical.autoAttributesPlugin()` (`Traffical.createAutoAttributesPlugin` is an alias).
+
+#### Keys
+
+| Key | Type | Values / source |
+|-----|------|-----------------|
+| `$browser` | enum | `chrome`, `edge`, `firefox`, `safari`, `other` — UA class only, no versions |
+| `$os` | enum | `ios`, `android`, `macos`, `windows`, `linux`, `other` — UA class; iPadOS desktop UAs are detected via touch points |
+| `$device_type` | enum | `mobile`, `tablet`, `desktop` — UA class first; desktop-class UAs with a coarse pointer fall back to width (`< 768` mobile, `< 1024` tablet) |
+| `$url` | string (url) | `location.href` |
+| `$host` | string | `location.host` |
+| `$path` | string | `location.pathname` |
+| `$query` | string | `location.search` without the leading `?`; omitted when empty |
+| `$referrer` | string | `document.referrer`; omitted when empty |
+| `$page_title` | string | `document.title`; omitted when empty |
+| `$utm_source`, `$utm_medium`, `$utm_campaign`, `$utm_term`, `$utm_content` | string | From the query string; persisted in `sessionStorage` (`traffical:utm`) and re-read on later pages of the session whose URL has none |
+| `$locale` | string | `navigator.language` (BCP 47, e.g. `en-GB`) |
+| `$timezone` | string | `Intl.DateTimeFormat().resolvedOptions().timeZone` (IANA, e.g. `Europe/Berlin`) |
+
+Rules:
+
+- **Caller wins.** Context you pass to `decide()` / `getParams()` overrides any derived key of the same name.
+- **Nothing empty.** A key that cannot be derived is omitted, never sent as `""`.
+- **Re-derived on every decision**, so SPA navigation is covered without patching `history`.
+- **SSR-safe.** Without a `window` the context passes through untouched.
+
+#### Configuration
+
+```typescript
+autoAttributesPlugin({
+  include?: AutoAttributeKey[],  // only derive these keys (default: all)
+  exclude?: AutoAttributeKey[],  // never derive these keys (applied after include)
+  persistUtm?: boolean,          // default true — sessionStorage-backed utm persistence
+});
+```
+
+`AUTO_ATTRIBUTE_KEYS` (the full key list) and the `AutoAttributeKey` type are exported for building `include` / `exclude` lists.
+
+Mobile SDKs emit the same `$` keys from their device-info providers (`$os`, `$os_version`, `$app_version`, `$locale`, `$timezone`, `$device_model`, `$device_type`): `DefaultDeviceInfoProvider` on iOS and `defaultDeviceInfoProvider` in `@traffical/react-native`.
+
 ## Type-Safe Event Tracking
 
 Use `@traffical/cli generate-types` to generate TypeScript interfaces for your event schemas. This lets you create a strictly typed `track` function that catches invalid event names and properties at compile time.

@@ -37,6 +37,13 @@ import {
   createDebugPlugin,
   type DebugPluginOptions,
 } from "./plugins/debug.js";
+import {
+  autoAttributesPlugin,
+  createAutoAttributesPlugin,
+  AUTO_ATTRIBUTE_KEYS,
+  type AutoAttributeKey,
+  type AutoAttributesPluginOptions,
+} from "./plugins/auto-attributes.js";
 
 // Global state for singleton pattern
 let _instance: TrafficalClient | null = null;
@@ -114,5 +121,11 @@ export {
   // Debug plugin
   createDebugPlugin,
   type DebugPluginOptions,
+  // Auto attributes plugin
+  autoAttributesPlugin,
+  createAutoAttributesPlugin,
+  AUTO_ATTRIBUTE_KEYS,
+  type AutoAttributeKey,
+  type AutoAttributesPluginOptions,
 };
 

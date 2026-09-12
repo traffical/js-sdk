@@ -26,7 +26,7 @@ import type {
 } from "../types/index.js";
 import { computeBucket, findMatchingAllocation } from "../hashing/bucket.js";
 import { weightedSelection } from "../hashing/weighted.js";
-import { evaluateConditions } from "./conditions.js";
+import { evaluateConditions, getNestedValue } from "./conditions.js";
 import { resolveContextualPolicyDetailed } from "../scoring/contextual.js";
 import { generateDecisionId } from "../ids/index.js";
 
@@ -57,11 +57,16 @@ function filterContext(
     return undefined;
   }
 
-  // Filter context to only include allowed fields
+  // Filter context to only include allowed fields. Uses the same lookup as
+  // condition evaluation (flat key first, then nested dot-path), so a dotted
+  // entry like "user.device_type" captures the nested value when the context
+  // nests and the literal key when it is flat. The captured entry is keyed by
+  // the allowed field string either way.
   const filtered: Context = {};
   for (const field of allowedFields) {
-    if (field in context) {
-      filtered[field] = context[field];
+    const value = getNestedValue(context, field);
+    if (value !== undefined) {
+      filtered[field] = value;
     }
   }
 

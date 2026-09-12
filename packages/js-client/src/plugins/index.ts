@@ -236,6 +236,17 @@ export {
 } from "./redirect-attribution.js";
 
 export {
+  autoAttributesPlugin,
+  createAutoAttributesPlugin,
+  AUTO_ATTRIBUTE_KEYS,
+  type AutoAttributeKey,
+  type AutoAttributesPluginOptions,
+  type AutoBrowser,
+  type AutoOS,
+  type AutoDeviceType,
+} from "./auto-attributes.js";
+
+export {
   createWarehouseNativeLoggerPlugin,
   createWarehouseNativeLogger,
   type WarehouseNativeLoggerOptions,

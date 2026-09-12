@@ -20,7 +20,7 @@ export function evaluateCondition(
 ): boolean {
   const { field, op, value, values } = condition;
 
-  // Get the context value using dot notation
+  // Resolve the field: literal flat key first, then dot-path traversal
   const contextValue = getNestedValue(context, field);
 
   switch (op) {
@@ -124,13 +124,40 @@ export function evaluateConditions(
 }
 
 /**
- * Gets a nested value from an object using dot notation.
+ * Resolves a condition field against a context (spec "Field lookup").
+ *
+ * Two steps; the first that yields a value wins:
+ *
+ * 1. **Flat key.** If `obj` has an own property named exactly `path` (dots
+ *    included), that value is returned — even when it is `undefined` or
+ *    `null`, which the operators then treat as "absent". No traversal runs.
+ * 2. **Nested dot-path.** Otherwise `path` is split on `.` and walked; any
+ *    segment reached on `null`, `undefined`, or a non-object yields
+ *    `undefined`.
+ *
+ * Precedence: `{ "a.b": 1, a: { b: 2 } }` resolves `a.b` to `1`.
+ *
+ * Also used by `filterContext` (context-logging allow-list) so a dotted
+ * `allowedFields` entry captures the same value a condition would see.
+ * Never throws on a missing path.
  *
  * @example
+ * getNestedValue({ "url.pathname": "/x" }, "url.pathname") // "/x"
  * getNestedValue({ user: { name: "Alice" } }, "user.name") // "Alice"
  * getNestedValue({ tags: ["a", "b"] }, "tags.0") // "a"
  */
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+export function getNestedValue(
+  obj: Record<string, unknown>,
+  path: string
+): unknown {
+  if (
+    obj !== null &&
+    typeof obj === "object" &&
+    Object.prototype.hasOwnProperty.call(obj, path)
+  ) {
+    return obj[path];
+  }
+
   const parts = path.split(".");
   let current: unknown = obj;
 

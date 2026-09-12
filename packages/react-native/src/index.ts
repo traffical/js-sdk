@@ -29,7 +29,13 @@ export {
   type PreloadedAsyncStorageProvider,
 } from "./storage.js";
 export { createRNLifecycleProvider } from "./lifecycle.js";
-export { type DeviceInfo, type DeviceInfoProvider } from "./device-info.js";
+export {
+  type DeviceInfo,
+  type DeviceInfoProvider,
+  type DefaultDeviceInfoOptions,
+  createDefaultDeviceInfoProvider,
+  defaultDeviceInfoProvider,
+} from "./device-info.js";
 
 // Provider and hooks
 export {

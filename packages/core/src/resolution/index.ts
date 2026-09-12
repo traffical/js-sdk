@@ -16,6 +16,7 @@ export {
 export {
   evaluateCondition,
   evaluateConditions,
+  getNestedValue,
   // Condition builders
   eq,
   neq,

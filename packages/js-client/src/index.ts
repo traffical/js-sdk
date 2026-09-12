@@ -88,6 +88,18 @@ export {
   type AnalyticsLike,
 } from "./plugins/warehouse-native-logger.js";
 
+// Export auto-attributes plugin ($-prefixed web context keys)
+export {
+  autoAttributesPlugin,
+  createAutoAttributesPlugin,
+  AUTO_ATTRIBUTE_KEYS,
+  type AutoAttributeKey,
+  type AutoAttributesPluginOptions,
+  type AutoBrowser,
+  type AutoOS,
+  type AutoDeviceType,
+} from "./plugins/auto-attributes.js";
+
 // Export debug plugin
 export {
   createDebugPlugin,

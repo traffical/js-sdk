@@ -117,7 +117,7 @@ Initializes the Traffical client with React Native defaults and provides it to c
 | `config.refreshIntervalMs` | `number` | No | Background refresh interval (default: 60000) |
 | `config.unitKeyFn` | `() => string` | No | Function to get the unit key. If not provided, uses automatic stable ID |
 | `config.contextFn` | `() => Context` | No | Function to get additional context |
-| `config.deviceInfoProvider` | `DeviceInfoProvider` | No | Provider for device metadata (OS, model, etc.) |
+| `config.deviceInfoProvider` | `DeviceInfoProvider` | No | Provider for device metadata. Pass the built-in `defaultDeviceInfoProvider` (see below) or your own |
 | `config.cacheMaxAgeMs` | `number` | No | Cache TTL for persisted responses (default: 24 hours) |
 | `config.trackDecisions` | `boolean` | No | Whether to track decision events (default: true) |
 | `config.decisionDeduplicationTtlMs` | `number` | No | Decision dedup TTL (default: 1 hour) |
@@ -130,6 +130,36 @@ Initializes the Traffical client with React Native defaults and provides it to c
 | `loadingComponent` | `ReactNode` | No | Shown while the SDK is initializing |
 
 ---
+
+#### Device attributes
+
+`defaultDeviceInfoProvider` derives device metadata from `Platform`, `Dimensions` and `Intl` only (no native modules) and is **opt-in** — nothing is added to your context unless you pass it:
+
+```tsx
+import { TrafficalRNProvider, defaultDeviceInfoProvider } from '@traffical/react-native';
+
+<TrafficalRNProvider config={{ …, deviceInfoProvider: defaultDeviceInfoProvider }}>
+```
+
+It emits the canonical `$`-prefixed system attributes shared by every Traffical SDK — registered as system attributes in the dashboard — plus the un-prefixed fields for compatibility with existing conditions:
+
+| Key | Type | Value |
+|-----|------|-------|
+| `$os` | enum | `ios`, `android`, `macos`, `windows`, `other` (from `Platform.OS`) |
+| `$os_version` | string | `Platform.Version` as a string |
+| `$device_type` | enum | iOS: `Platform.isPad` → `tablet` else `mobile`; Android: shortest side ≥ 600dp → `tablet`; other platforms: width `< 768` mobile, `< 1024` tablet, else `desktop` |
+| `$device_model` | string | Android only (`Platform.constants.Model`); iOS exposes no model without a native module |
+| `$locale`, `$timezone` | string | `Intl.DateTimeFormat().resolvedOptions()` |
+| `$app_version` | string | Only when supplied — RN has no app version without a native module |
+| `osName`, `osVersion`, `locale`, `timezone`, `screenWidth`, `screenHeight`, `pixelRatio`, `deviceModel`, `appVersion`, `appBuildNumber` | | Compatibility fields, same values |
+
+To populate `$app_version`, build the provider with the version from your own source (`expo-constants`, `react-native-device-info`, a generated constant):
+
+```tsx
+import { createDefaultDeviceInfoProvider } from '@traffical/react-native';
+
+const deviceInfoProvider = createDefaultDeviceInfoProvider({ appVersion: '2.3.1', appBuildNumber: '451' });
+```
 
 ### useTraffical
 

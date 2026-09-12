@@ -162,6 +162,38 @@ describe("contextual scoring resolution", () => {
     expect(decision.metadata.filteredContext!.secretField).toBeUndefined();
   });
 
+  test("filteredContext resolves a dotted allowedFields entry flat-first, then nested", () => {
+    const dotted = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;
+    for (const layer of dotted.layers) {
+      for (const policy of layer.policies) {
+        if (policy.contextLogging) {
+          policy.contextLogging.allowedFields = [
+            ...policy.contextLogging.allowedFields,
+            "user.device_type",
+          ];
+        }
+      }
+    }
+    const base = { userId: "user-high-engage", engagement_score: 8.0, device_type: "mobile" };
+
+    // Nested context: the dotted entry captures context.user.device_type.
+    const nested = decide(dotted, { ...base, user: { device_type: "tablet" } }, defaults);
+    expect(nested.metadata.filteredContext!["user.device_type"]).toBe("tablet");
+    expect(nested.metadata.filteredContext!.user).toBeUndefined();
+
+    // Flat context: the literal key wins over the nested object.
+    const both = decide(
+      dotted,
+      { ...base, "user.device_type": "phone", user: { device_type: "tablet" } },
+      defaults
+    );
+    expect(both.metadata.filteredContext!["user.device_type"]).toBe("phone");
+
+    // Neither shape: the entry is simply absent.
+    const none = decide(dotted, base, defaults);
+    expect(none.metadata.filteredContext!["user.device_type"]).toBeUndefined();
+  });
+
   test("falls back to bucket-based when contextualModel is absent", () => {
     // Create a copy of the bundle without contextualModel
     const bundleWithoutModel = JSON.parse(JSON.stringify(bundle)) as ConfigBundle;

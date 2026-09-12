@@ -147,6 +147,32 @@ describe("S5: omitted relational-condition value never matches", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Field lookup — literal flat key first, then dot-path traversal
+// ---------------------------------------------------------------------------
+describe("field lookup: flat dotted key first, then nested", () => {
+  const { bundle, fixture } = loadPair(
+    "bundle_conditions_flat_dotted_key",
+    "expected_conditions_flat_dotted_key"
+  );
+
+  for (const tc of fixture.testCases) {
+    test(tc.name, () => {
+      const decision = decide(bundle, tc.context, defaultsFromBundle(bundle));
+      for (const [key, expected] of Object.entries(tc.expectedAssignments ?? {})) {
+        expect(decision.assignments[key]).toEqual(expected);
+      }
+      for (const expLayer of tc.expectedLayers ?? []) {
+        const got = decision.metadata.layers.find((l) => l.layerId === expLayer.layerId);
+        expect(got).toBeDefined();
+        expect(got!.bucket).toBe(expLayer.bucket);
+        expect(got!.policyId).toBe(expLayer.policyId);
+        expect(got!.allocationName).toBe(expLayer.allocationName);
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // UTF-8 byte hashing (previously-skipped unicode vectors)
 // ---------------------------------------------------------------------------
 describe("unicode: SHA-256 v2 over UTF-8 bytes", () => {

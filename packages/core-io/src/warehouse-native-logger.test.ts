@@ -337,8 +337,8 @@ describe("createWarehouseNativeLogger", () => {
       event: "Experiment Assignment",
       userId: "u1",
     });
-    // The Jitsu envelope carries the stable keys too — this is the path the
-    // Salla-style BYO integration actually uses.
+    // The Jitsu envelope carries the stable keys too — this is the path a
+    // BYO-warehouse integration routing through Jitsu actually uses.
     expect(assignmentBody.properties).toMatchObject({
       policy_key: "checkout-test",
       allocation_key: "treatment-key",

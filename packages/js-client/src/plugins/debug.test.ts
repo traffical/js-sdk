@@ -105,7 +105,7 @@ describe("debug plugin: context overrides + re-decide", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Through the real client: the Mahally QA scenario. A top-priority policy
+// Through the real client: the QA-policy scenario. A top-priority policy
 // targets `testMode exists`; the app never sets it; the inspector does.
 // ---------------------------------------------------------------------------
 

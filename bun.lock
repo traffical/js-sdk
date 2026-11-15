@@ -10,14 +10,14 @@
     },
     "packages/core": {
       "name": "@traffical/core",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "dependencies": {
         "@noble/hashes": "^2.2.0",
         "nanoid": "^5.0.9",
         "ulid": "^2.3.0",
       },
       "devDependencies": {
-        "@traffical/sdk-spec": "^0.9.0",
+        "@traffical/sdk-spec": "^0.10.0",
         "@types/bun": "latest",
         "ajv": "^8.17.1",
         "typescript": "^5.3.0",
@@ -25,9 +25,9 @@
     },
     "packages/core-io": {
       "name": "@traffical/core-io",
-      "version": "0.7.1",
+      "version": "0.7.2",
       "dependencies": {
-        "@traffical/core": "0.12.0",
+        "@traffical/core": "0.12.1",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -36,10 +36,10 @@
     },
     "packages/js-client": {
       "name": "@traffical/js-client",
-      "version": "0.18.0",
+      "version": "0.19.0",
       "dependencies": {
-        "@traffical/core": "0.12.0",
-        "@traffical/core-io": "0.7.1",
+        "@traffical/core": "0.12.1",
+        "@traffical/core-io": "0.7.2",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -49,10 +49,10 @@
     },
     "packages/node": {
       "name": "@traffical/node",
-      "version": "0.12.1",
+      "version": "0.12.2",
       "dependencies": {
-        "@traffical/core": "0.12.0",
-        "@traffical/core-io": "0.7.1",
+        "@traffical/core": "0.12.1",
+        "@traffical/core-io": "0.7.2",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -61,9 +61,9 @@
     },
     "packages/openfeature-core": {
       "name": "@traffical/openfeature-core",
-      "version": "0.2.5",
+      "version": "0.2.7",
       "dependencies": {
-        "@traffical/core": "0.12.0",
+        "@traffical/core": "0.12.1",
       },
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
@@ -76,16 +76,16 @@
     },
     "packages/openfeature-server": {
       "name": "@traffical/openfeature-server",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "dependencies": {
-        "@traffical/core": "0.12.0",
-        "@traffical/node": "0.12.1",
-        "@traffical/openfeature-core": "0.2.5",
+        "@traffical/core": "0.12.1",
+        "@traffical/node": "0.12.2",
+        "@traffical/openfeature-core": "0.2.7",
       },
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
         "@openfeature/server-sdk": "^1.22.0",
-        "@traffical/sdk-spec": "^0.9.0",
+        "@traffical/sdk-spec": "^0.10.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -95,16 +95,16 @@
     },
     "packages/openfeature-web": {
       "name": "@traffical/openfeature-web",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "dependencies": {
-        "@traffical/core": "0.12.0",
-        "@traffical/js-client": "0.18.0",
-        "@traffical/openfeature-core": "0.2.5",
+        "@traffical/core": "0.12.1",
+        "@traffical/js-client": "0.19.0",
+        "@traffical/openfeature-core": "0.2.7",
       },
       "devDependencies": {
         "@openfeature/core": "^1.11.0",
         "@openfeature/web-sdk": "^1.9.0",
-        "@traffical/sdk-spec": "^0.9.0",
+        "@traffical/sdk-spec": "^0.10.0",
         "@types/bun": "latest",
         "typescript": "^5.3.0",
       },
@@ -114,10 +114,10 @@
     },
     "packages/react": {
       "name": "@traffical/react",
-      "version": "0.6.6",
+      "version": "0.6.7",
       "dependencies": {
-        "@traffical/core": "0.10.0",
-        "@traffical/js-client": "0.15.0",
+        "@traffical/core": "0.12.1",
+        "@traffical/js-client": "0.19.0",
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "^15",
@@ -133,10 +133,10 @@
     },
     "packages/react-native": {
       "name": "@traffical/react-native",
-      "version": "0.8.4",
+      "version": "0.9.0",
       "dependencies": {
-        "@traffical/core": "0.9.0",
-        "@traffical/js-client": "0.13.0",
+        "@traffical/core": "0.12.1",
+        "@traffical/js-client": "0.19.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -151,11 +151,11 @@
     },
     "packages/svelte": {
       "name": "@traffical/svelte",
-      "version": "0.7.4",
+      "version": "0.7.5",
       "dependencies": {
-        "@traffical/core": "0.9.0",
-        "@traffical/js-client": "0.13.0",
-        "@traffical/node": "0.7.0",
+        "@traffical/core": "0.12.1",
+        "@traffical/js-client": "0.19.0",
+        "@traffical/node": "0.12.2",
       },
       "devDependencies": {
         "@sveltejs/package": "^2.3.0",
@@ -422,7 +422,7 @@
 
     "@traffical/react-native": ["@traffical/react-native@workspace:packages/react-native"],
 
-    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.9.0", "", {}, "sha512-FwEmzWW6iMdr2HymUqMnPEc2JRno2oBPlICQeZ2CBLvEv/Rl8OTr6SPurY0egTLcVbfXsOE4WUFrCzLanbgTXw=="],
+    "@traffical/sdk-spec": ["@traffical/sdk-spec@0.10.0", "", {}, "sha512-Fz+e88bTcDc1vvmDLhK4WjNJTkNE1SSG/LXatI3a/BiT3gd+6bxZgXiuJT9dpaVyq6MXsohc4iYXQy1v9PkmGA=="],
 
     "@traffical/svelte": ["@traffical/svelte@workspace:packages/svelte"],
 

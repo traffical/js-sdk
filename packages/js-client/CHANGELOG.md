@@ -1,5 +1,14 @@
 # @traffical/js-client
 
+## 0.19.1
+
+### Patch Changes
+
+- b0fe87e: Publish through npm trusted publishing (OIDC) with provenance attestations. No code changes.
+- Updated dependencies [b0fe87e]
+  - @traffical/core@0.12.2
+  - @traffical/core-io@0.7.3
+
 ## 0.19.0
 
 ### Minor Changes

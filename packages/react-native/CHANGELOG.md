@@ -1,5 +1,14 @@
 # @traffical/react-native
 
+## 0.9.1
+
+### Patch Changes
+
+- b0fe87e: Publish through npm trusted publishing (OIDC) with provenance attestations. No code changes.
+- Updated dependencies [b0fe87e]
+  - @traffical/core@0.12.2
+  - @traffical/js-client@0.19.1
+
 ## 0.9.0
 
 ### Minor Changes

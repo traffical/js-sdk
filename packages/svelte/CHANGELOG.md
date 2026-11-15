@@ -1,5 +1,15 @@
 # @traffical/svelte
 
+## 0.7.6
+
+### Patch Changes
+
+- b0fe87e: Publish through npm trusted publishing (OIDC) with provenance attestations. No code changes.
+- Updated dependencies [b0fe87e]
+  - @traffical/core@0.12.2
+  - @traffical/js-client@0.19.1
+  - @traffical/node@0.12.3
+
 ## 0.7.5
 
 ### Patch Changes

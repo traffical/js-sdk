@@ -1,5 +1,11 @@
 # @traffical/core
 
+## 0.12.2
+
+### Patch Changes
+
+- b0fe87e: Publish through npm trusted publishing (OIDC) with provenance attestations. No code changes.
+
 ## 0.12.1
 
 ### Patch Changes

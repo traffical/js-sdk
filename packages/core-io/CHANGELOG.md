@@ -1,5 +1,13 @@
 # @traffical/core-io
 
+## 0.7.3
+
+### Patch Changes
+
+- b0fe87e: Publish through npm trusted publishing (OIDC) with provenance attestations. No code changes.
+- Updated dependencies [b0fe87e]
+  - @traffical/core@0.12.2
+
 ## 0.7.2
 
 ### Patch Changes

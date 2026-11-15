@@ -1,5 +1,14 @@
 # @traffical/react
 
+## 0.6.8
+
+### Patch Changes
+
+- b0fe87e: Publish through npm trusted publishing (OIDC) with provenance attestations. No code changes.
+- Updated dependencies [b0fe87e]
+  - @traffical/core@0.12.2
+  - @traffical/js-client@0.19.1
+
 ## 0.6.7
 
 ### Patch Changes

@@ -1,0 +1,51 @@
+name: CDN cache purge
+
+# Manual purge of the mutable js-client CDN URLs (v<major> and latest).
+# The release workflow purges after each publish; run this by hand when that
+# step warned, or to check that the Cloudflare token can still purge.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Keep in sync with the default in packages/js-client/scripts/release-cdn.sh
+      CDN_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID || '1385a95c8cb15db16a4432dc19e2a42d' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the token
+        run: |
+          curl -s "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | jq '{success, status: .result.status, errors}'
+
+      - name: Zones this token can see
+        run: |
+          curl -s "https://api.cloudflare.com/client/v4/zones?per_page=50" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | jq '{success, errors, zones: [.result[]? | {id, name}]}'
+          echo "Zone the purge targets: $CDN_ZONE_ID"
+
+      - name: Purge
+        run: |
+          MAJOR=$(jq -r '.version | split(".")[0]' packages/js-client/package.json)
+          BASE="https://cdn.traffical.io/js-client"
+          BODY=$(jq -n --arg b "$BASE" --arg m "$MAJOR" '{files: [
+            "\($b)/v\($m)/traffical.min.js",
+            "\($b)/v\($m)/traffical.min.js.map",
+            "\($b)/latest/traffical.min.js",
+            "\($b)/latest/traffical.min.js.map"
+          ]}')
+          RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/zones/$CDN_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")
+          echo "$RESPONSE" | jq '{success, errors}'
+          echo "$RESPONSE" | jq -e '.success == true' > /dev/null

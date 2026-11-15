@@ -19,11 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Prints the token's id (not its value) so it can be matched against the
+      # token list in the Cloudflare dashboard. User-owned and account-owned
+      # tokens verify at different endpoints, so try both.
       - name: Check the token
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          echo "As a user-owned token:"
           curl -s "https://api.cloudflare.com/client/v4/user/tokens/verify" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            | jq '{success, status: .result.status, errors}'
+            | jq '{success, id: .result.id, status: .result.status, errors}'
+          echo "As an account-owned token:"
+          curl -s "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | jq '{success, id: .result.id, status: .result.status, errors}'
 
       - name: Zones this token can see
         run: |
